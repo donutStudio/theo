@@ -1,3 +1,13 @@
+/**
+ * Electron window + overlay configuration
+ * - Fullscreen, transparent, frameless
+ * - Click-through with hover-based interaction
+ * - Focus management to prevent minimization
+ *
+ * ! Do not change unless necessary.
+ * Known to be stable as of 12/21/2025.
+ */
+
 import { app, BrowserWindow, Menu, screen, ipcMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
@@ -20,6 +30,8 @@ const createWindow = () => {
     backgroundColor: "#00000000",
     hasShadow: false,
     show: false, // important: don't show until renderer is ready
+    minimizable: false, // Prevent minimization
+    resizable: false, // Prevent resizing
     alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -27,9 +39,14 @@ const createWindow = () => {
     },
   });
 
+  // Force always-on-top with highest priority and make visible on all workspaces
+  mainWindow.setAlwaysOnTop(true, "screen-saver");
+  mainWindow.setVisibleOnAllWorkspaces(true);
+
   // Set up click-through toggle handlers
   ipcMain.on("enable-mouse", () => {
     mainWindow.setIgnoreMouseEvents(false);
+    mainWindow.focus(); // Force focus to keep window on top
   });
 
   ipcMain.on("disable-mouse", () => {
@@ -54,10 +71,13 @@ const createWindow = () => {
   // Show window only after renderer is ready, then enter fullscreen.
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+    mainWindow.focus(); // Force focus immediately
 
     // Small delay avoids compositor / GPU race issues on some Windows setups
     setTimeout(() => {
       mainWindow.setFullScreen(true);
+      // Re-enforce always-on-top after fullscreen
+      mainWindow.setAlwaysOnTop(true, "screen-saver");
     }, 50);
   });
 
