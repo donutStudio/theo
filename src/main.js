@@ -11,7 +11,7 @@ const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;
 
-  // Create the browser window.
+  // Create the browser window (hidden at first).
   const mainWindow = new BrowserWindow({
     width: width,
     height: height,
@@ -19,7 +19,7 @@ const createWindow = () => {
     transparent: true,
     backgroundColor: "#00000000",
     hasShadow: false,
-    show: false,
+    show: false, // important: don't show until renderer is ready
     alwaysOnTop: true,
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -51,9 +51,14 @@ const createWindow = () => {
     );
   }
 
-  // Show window when ready to paint (helps with transparency on Windows)
+  // Show window only after renderer is ready, then enter fullscreen.
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
+
+    // Small delay avoids compositor / GPU race issues on some Windows setups
+    setTimeout(() => {
+      mainWindow.setFullScreen(true);
+    }, 50);
   });
 
   // DevTools will not open by default
