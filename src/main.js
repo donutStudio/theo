@@ -17,6 +17,14 @@ if (started) {
   app.quit();
 }
 
+// Set up IPC handler for getting taskbar height (calculate dynamically)
+ipcMain.handle("get-taskbar-height", () => {
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const taskbarHeight =
+    primaryDisplay.size.height - primaryDisplay.workAreaSize.height;
+  return taskbarHeight;
+});
+
 const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   const { width, height } = primaryDisplay.size;

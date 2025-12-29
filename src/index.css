@@ -6,7 +6,7 @@
 
 html,
 body {
-  background: rgba(255, 0, 0, 0.075) !important;
+  background: rgba(255, 0, 0, 0) !important;
   margin: 0;
   padding: 0;
   width: 100%;
@@ -29,4 +29,20 @@ body {
 
 .inter {
   font-family: "Inter", sans-serif;
+}
+
+.brandbg {
+  background-color: rgb(251 249 255);
+}
+
+.brandborder {
+  border-color: rgb(0, 0, 0);
+}
+
+.brandbgdark {
+  background-color: rgb(31, 0, 94);
+}
+
+.brandborderdark {
+  border-color: rgb(187, 154, 255);
 }
