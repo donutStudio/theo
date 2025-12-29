@@ -18,6 +18,7 @@ function Notch({ taskbarHeight = 0 }) {
           src={mascot}
           alt="Mascot"
           className="w-full h-full object-contain rounded-full"
+          draggable="false"
         />
       </div>
 
@@ -42,7 +43,10 @@ function Notch({ taskbarHeight = 0 }) {
         </div>
 
         <div className="tooltip" data-tip="Move Theo">
-          <button className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0">
+          <button
+            onClick={() => document.getElementById("movemodal").showModal()}
+            className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
+          >
             <i className="bi bi-arrows-move"></i>
           </button>
         </div>
@@ -91,9 +95,31 @@ function Notch({ taskbarHeight = 0 }) {
                 src={mascot}
                 alt=""
                 className="shrink-0 w-50 h-50 object-contain"
+                draggable="false"
               />
             </div>
           </div>
+        </div>
+      </dialog>
+      <dialog id="movemodal" className="modal">
+        <div className="modal-box brandbg text-center border-2 rounded-4xl p-8 border-black relative overflow-visible">
+          <img
+            src={mascot}
+            alt=""
+            draggable="false"
+            className="absolute -top-16 left-1/2 -translate-x-1/2 w-30 h-30 object-contain"
+          />
+
+          <form method="dialog" className="absolute top-4 right-4">
+            <button className="btn btn-ghost btn-sm p-0 w-8 h-8 min-h-0 border-0 hover:bg-transparent">
+              <i className="bi bi-x-circle-fill text-2xl"></i>
+            </button>
+          </form>
+
+          <h3 className="font-semibold text-3xl bric mt-5">Modal Position</h3>
+          <p className="text-gray-500 inter text-sm font-light mt-1.5">
+            Select a corner of your screen to have Theo live!
+          </p>
         </div>
       </dialog>
     </div>
