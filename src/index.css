@@ -25,14 +25,16 @@ body {
 
 .bric {
   font-family: "Bricolage Grotesque", serif;
+  letter-spacing: -1px;
 }
 
 .inter {
   font-family: "Inter", sans-serif;
+  letter-spacing: -0.025em;
 }
 
 .brandbg {
-  background-color: rgb(251 249 255);
+  background-color: rgb(242, 234, 255);
 }
 
 .brandborder {

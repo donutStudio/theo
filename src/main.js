@@ -61,6 +61,11 @@ const createWindow = () => {
     mainWindow.setIgnoreMouseEvents(true, { forward: true });
   });
 
+  // Set up quit handler
+  ipcMain.on("quit-app", () => {
+    app.quit();
+  });
+
   // Start with click-through enabled (window is click-through by default)
   mainWindow.setIgnoreMouseEvents(true, { forward: true });
 
