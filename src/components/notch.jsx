@@ -4,16 +4,31 @@ import mascot from "../assets/mascot.png";
 function Notch({ taskbarHeight = 0 }) {
   const bottomOffset = taskbarHeight + 10;
   const [isHovered, setIsHovered] = useState(false);
+  const [position, setPosition] = useState("bottom-left");
+  const isRight = position.includes("right");
+  const isBottom = position.includes("bottom");
+  const containerSideClass = isRight ? "right-0" : "left-0";
+  const rowDirClass = isRight ? "flex-row-reverse" : "flex-row";
+  const overlapMargin = isRight ? "-ml-17" : "-mr-17";
+  const padClass = isRight ? "pr-15 pl-5" : "pl-15 pr-5";
+  const verticalStyle = isBottom
+    ? { bottom: `${bottomOffset}px`, top: "auto" }
+    : { top: "10px", bottom: "auto" };
+  const moveBtnClass = (key) =>
+    key === position
+      ? "w-full border-2 border-black p-5 inter rounded-2xl flex justify-between items-center"
+      : "w-full border border-gray-400 p-5 inter rounded-2xl flex justify-between items-center";
+  const tooltipDirClass = isBottom ? "" : "tooltip-bottom";
 
   return (
     <div
-      className="fixed left-0 flex items-center gap-2 mx-4 transition-all duration-300 ease-in-out"
-      style={{ bottom: `${bottomOffset}px` }}
+      className={`fixed ${containerSideClass} ${rowDirClass} flex items-center gap-2 mx-4 transition-all duration-300 ease-in-out`}
+      style={verticalStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
       {/* Main notch button */}
-      <div className="w-15 h-15 p-2 border brandborderdark rounded-full flex items-center justify-center brandbgdark shrink-0 -mr-17 z-10 relative">
+      <div className={`w-15 h-15 p-2 border brandborderdark rounded-full flex items-center justify-center brandbgdark shrink-0 ${overlapMargin} z-10 relative`}>
         <img
           src={mascot}
           alt="Mascot"
@@ -21,19 +36,20 @@ function Notch({ taskbarHeight = 0 }) {
           draggable="false"
         />
       </div>
+      
 
       {/* Expanded buttons container */}
       <div
-        className={`flex bric items-center gap-2 overflow transition-all duration-300 ease-in-out border brandborderdark brandbgdark h-15 rounded-full pl-15 pr-5 relative z-0 ${
+        className={`flex bric items-center gap-2 overflow transition-all duration-300 ease-in-out border brandborderdark brandbgdark h-15 rounded-full ${padClass} relative z-0 ${
           isHovered ? "max-w-96 opacity-100" : "max-w-0 opacity-0"
         }`}
       >
-        <div className="tooltip border " data-tip="Settings">
+        <div className={`tooltip border ${tooltipDirClass}`} data-tip="Settings">
           <button className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0">
             <i className="bi bi-gear-fill"></i>
           </button>
         </div>
-        <div className="tooltip" data-tip="Help">
+        <div className={`tooltip ${tooltipDirClass}`} data-tip="Help">
           <button
             onClick={() => document.getElementById("helpmodal").showModal()}
             className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
@@ -42,7 +58,7 @@ function Notch({ taskbarHeight = 0 }) {
           </button>
         </div>
 
-        <div className="tooltip" data-tip="Move Theo">
+        <div className={`tooltip ${tooltipDirClass}`} data-tip="Move Theo">
           <button
             onClick={() => document.getElementById("movemodal").showModal()}
             className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
@@ -51,7 +67,7 @@ function Notch({ taskbarHeight = 0 }) {
           </button>
         </div>
 
-        <div className="tooltip" data-tip="Quit">
+        <div className={`tooltip ${tooltipDirClass}`} data-tip="Quit">
           <button
             onClick={() => {
               if (window.electron?.ipcRenderer) {
@@ -101,6 +117,8 @@ function Notch({ taskbarHeight = 0 }) {
           </div>
         </div>
       </dialog>
+      {/* SEPERATION */}
+
       <dialog id="movemodal" className="modal">
         <div className="modal-box brandbg text-center border-2 rounded-4xl p-8 border-black relative overflow-visible">
           <img
@@ -120,6 +138,32 @@ function Notch({ taskbarHeight = 0 }) {
           <p className="text-gray-500 inter text-sm font-light mt-1.5">
             Select a corner of your screen to have Theo live!
           </p>
+          <div id="moveButtons" className="mt-5 flex flex-col gap-3">
+            <button onClick={() => setPosition("bottom-left")} className={moveBtnClass("bottom-left")}>
+              <span>Bottom-Left</span>
+              <span className="text-2xl">
+                <i className="bi bi-arrow-down-left"></i>
+              </span>
+            </button>
+            <button onClick={() => setPosition("top-left")} className={moveBtnClass("top-left")}>
+              <span>Top-Left</span>
+              <span className="text-2xl">
+                <i className="bi bi-arrow-up-left"></i>
+              </span>
+            </button>
+            <button onClick={() => setPosition("bottom-right")} className={moveBtnClass("bottom-right")}>
+              <span>Bottom-Right</span>
+              <span className="text-2xl">
+                <i className="bi bi-arrow-down-right"></i>
+              </span>
+            </button>
+            <button onClick={() => setPosition("top-right")} className={moveBtnClass("top-right")}>
+              <span>Top-Right</span>
+              <span className="text-2xl">
+                <i className="bi bi-arrow-up-right"></i>
+              </span>
+            </button>
+          </div>
         </div>
       </dialog>
     </div>
