@@ -11,6 +11,7 @@
 import { app, BrowserWindow, Menu, screen, ipcMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
+import { GlobalKeyboardListener } from "node-global-key-listener";
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -24,6 +25,91 @@ ipcMain.handle("get-taskbar-height", () => {
     primaryDisplay.size.height - primaryDisplay.workAreaSize.height;
   return taskbarHeight;
 });
+
+// Global reference to main window for shortcut handlers
+let mainWindowRef = null;
+
+// Global Ctrl+Win key state tracking
+let ctrlKeyPressed = false;
+let winKeyPressed = false;
+let ctrlWinPressed = false;
+
+// Function to handle Ctrl+Win key press
+const handleCtrlWinPress = () => {
+  if (!ctrlWinPressed) {
+    ctrlWinPressed = true;
+    if (mainWindowRef && mainWindowRef.webContents) {
+      mainWindowRef.webContents.send("ctrl-win-key-down");
+    }
+  }
+};
+
+// Function to handle Ctrl+Win key release
+const handleCtrlWinRelease = () => {
+  if (ctrlWinPressed) {
+    ctrlWinPressed = false;
+    if (mainWindowRef && mainWindowRef.webContents) {
+      mainWindowRef.webContents.send("ctrl-win-key-up");
+    }
+  }
+};
+
+// Initialize global keyboard listener
+let gkl = null;
+
+const initializeGlobalKeyListener = () => {
+  gkl = new GlobalKeyboardListener();
+
+  // Listen for keydown/keyup events
+  gkl.addListener((e, down) => {
+    let stateChanged = false;
+
+    // Check for Ctrl key
+    if (
+      e.name === "LEFT CONTROL" ||
+      e.name === "RIGHT CONTROL" ||
+      e.name === "CONTROL"
+    ) {
+      const wasPressed = ctrlKeyPressed;
+      ctrlKeyPressed = down;
+      stateChanged = true;
+
+      // If Ctrl was released and we were in Ctrl+Win state, release it
+      if (!down && wasPressed && ctrlWinPressed) {
+        handleCtrlWinRelease();
+      }
+    }
+
+    // Check for Win key (Windows key)
+    // On Windows, it might be called "LEFT META", "RIGHT META", or "META"
+    if (
+      e.name === "LEFT META" ||
+      e.name === "RIGHT META" ||
+      e.name === "META" ||
+      e.name === "LEFT WIN" ||
+      e.name === "RIGHT WIN" ||
+      e.name === "WIN"
+    ) {
+      const wasPressed = winKeyPressed;
+      winKeyPressed = down;
+      stateChanged = true;
+
+      // If Win was released and we were in Ctrl+Win state, release it
+      if (!down && wasPressed && ctrlWinPressed) {
+        handleCtrlWinRelease();
+      }
+    }
+
+    // If both Ctrl and Win are pressed (down), trigger the handler
+    if (down && ctrlKeyPressed && winKeyPressed && !ctrlWinPressed) {
+      handleCtrlWinPress();
+    }
+  });
+
+  console.log(
+    "Global keyboard listener started - listening for Ctrl+Win globally"
+  );
+};
 
 const createWindow = () => {
   const primaryDisplay = screen.getPrimaryDisplay();
@@ -51,6 +137,9 @@ const createWindow = () => {
   mainWindow.setAlwaysOnTop(true, "screen-saver");
   mainWindow.setVisibleOnAllWorkspaces(true);
 
+  // Store global reference to main window
+  mainWindowRef = mainWindow;
+
   // Set up click-through toggle handlers
   ipcMain.on("enable-mouse", () => {
     mainWindow.setIgnoreMouseEvents(false);
@@ -64,6 +153,11 @@ const createWindow = () => {
   // Set up quit handler
   ipcMain.on("quit-app", () => {
     app.quit();
+  });
+
+  // Clean up on window close
+  mainWindow.on("closed", () => {
+    mainWindowRef = null;
   });
 
   // Start with click-through enabled (window is click-through by default)
@@ -101,6 +195,10 @@ const createWindow = () => {
 // initialization and is ready to create browser windows.
 // Some APIs can only be used after this event occurs.
 app.whenReady().then(() => {
+  // Initialize global keyboard listener
+  // This works GLOBALLY regardless of window focus
+  initializeGlobalKeyListener();
+
   createWindow();
 
   // On OS X it's common to re-create a window in the app when the
@@ -110,6 +208,13 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+// Clean up global keyboard listener when app quits
+app.on("will-quit", () => {
+  if (gkl) {
+    gkl.kill();
+  }
 });
 
 // Quit when all windows are closed, except on macOS. There, it's common
