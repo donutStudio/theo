@@ -10,6 +10,9 @@ function Notch({ taskbarHeight = 0 }) {
   const [isCtrlWinHeld, setIsCtrlWinHeld] = useState(false);
   const ping1Audio = useRef(null);
   const ping2Audio = useRef(null);
+  // Renderer-side cooldown to avoid spamming when window has focus
+  const CTRL_WIN_COOLDOWN_MS = 2000;
+  const lastCtrlWinAtRef = useRef(0);
   const isRight = position.includes("right");
   const isBottom = position.includes("bottom");
   const containerSideClass = isRight ? "right-0" : "left-0";
@@ -39,6 +42,10 @@ function Notch({ taskbarHeight = 0 }) {
   useEffect(() => {
     if (window.electron?.ipcRenderer) {
       const handleCtrlWinKeyDown = () => {
+        // Respect renderer-side cooldown
+        if (Date.now() - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS)
+          return;
+
         if (!isCtrlWinHeld) {
           setIsCtrlWinHeld(true);
           // Play ping1 when Ctrl+Win is pressed
@@ -54,7 +61,8 @@ function Notch({ taskbarHeight = 0 }) {
       const handleCtrlWinKeyUp = () => {
         if (isCtrlWinHeld) {
           setIsCtrlWinHeld(false);
-          // Play ping2 when Ctrl+Win is released
+          // Record toggle time and play ping2 when Ctrl+Win is released
+          lastCtrlWinAtRef.current = Date.now();
           if (ping2Audio.current) {
             ping2Audio.current.currentTime = 0;
             ping2Audio.current.play().catch((err) => {
@@ -70,11 +78,11 @@ function Notch({ taskbarHeight = 0 }) {
       return () => {
         window.electron.ipcRenderer.removeListener(
           "ctrl-win-key-down",
-          handleCtrlWinKeyDown
+          handleCtrlWinKeyDown,
         );
         window.electron.ipcRenderer.removeListener(
           "ctrl-win-key-up",
-          handleCtrlWinKeyUp
+          handleCtrlWinKeyUp,
         );
       };
     }
@@ -89,6 +97,10 @@ function Notch({ taskbarHeight = 0 }) {
         (e.key === "Meta" || e.key === "Win" || e.metaKey) &&
         !isCtrlWinHeld
       ) {
+        // Respect renderer-side cooldown
+        if (Date.now() - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS)
+          return;
+
         // Make sure both Ctrl and Win are pressed
         if (
           (e.ctrlKey && (e.metaKey || e.key === "Meta" || e.key === "Win")) ||
@@ -113,7 +125,8 @@ function Notch({ taskbarHeight = 0 }) {
         isCtrlWinHeld
       ) {
         setIsCtrlWinHeld(false);
-        // Play ping2 when Ctrl+Win is released
+        // Record toggle time and play ping2 when Ctrl+Win is released
+        lastCtrlWinAtRef.current = Date.now();
         if (ping2Audio.current) {
           ping2Audio.current.currentTime = 0;
           ping2Audio.current.play().catch((err) => {

@@ -35,24 +35,8 @@ const App = () => {
     }
   }, []);
 
-  const handleMouseEnter = () => {
-    if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.send("enable-mouse");
-    }
-  };
-
-  const handleMouseLeave = () => {
-    if (window.electron?.ipcRenderer) {
-      window.electron.ipcRenderer.send("disable-mouse");
-    }
-  };
-
   return (
-    <div
-      className="pointer-events-auto"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-    >
+    <div className="pointer-events-auto">
       <Notch taskbarHeight={taskbarHeight} />
     </div>
   );
