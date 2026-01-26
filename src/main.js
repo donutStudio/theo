@@ -5,6 +5,17 @@
  * - Focus management to prevent minimization
  */
 
+// Load environment variables FIRST (before any other imports that might use them)
+import dotenv from "dotenv";
+import { fileURLToPath } from "node:url";
+import { dirname, join } from "node:path";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env file from project root
+dotenv.config({ path: join(__dirname, "../../.env") });
+
 import { app, BrowserWindow, Menu, screen, ipcMain } from "electron";
 import path from "node:path";
 import started from "electron-squirrel-startup";
