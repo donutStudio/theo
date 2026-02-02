@@ -3,17 +3,37 @@ import { useEffect, useState } from "react";
 import "./index.css";
 import Notch from "./components/notch";
 import startupSound from "./assets/verbalpreset/startup.wav";
+import { initPushToTalk } from "./utils/sttUtil";
+import { initializeGroq } from "./utils/sttService";
 
 const App = () => {
   const [taskbarHeight, setTaskbarHeight] = useState(0);
 
-  // Get taskbar height
+  // Initialize app
   useEffect(() => {
+    // Initialize Groq client with API key from environment variables
+    if (window.electron?.env?.GROQ_API_KEY) {
+      const isInitialized = initializeGroq(window.electron.env.GROQ_API_KEY);
+      console.log("Groq client initialized:", isInitialized);
+    } else {
+      console.error("GROQ_API_KEY not found in environment variables");
+    }
+
+    // Initialize push-to-talk functionality
+    if (window.electron?.ipcRenderer) {
+      try {
+        initPushToTalk();
+        console.log("Push-to-talk initialized");
+      } catch (err) {
+        console.error("Failed to initialize push-to-talk:", err);
+      }
+    }
+
+    // Get taskbar height
     const getTaskbarHeight = async () => {
       if (window.electron?.ipcRenderer) {
         try {
-          const height =
-            await window.electron.ipcRenderer.invoke("get-taskbar-height");
+          const height = await window.electron.ipcRenderer.invoke("get-taskbar-height");
           setTaskbarHeight(height);
         } catch (error) {
           console.error("Failed to get taskbar height:", error);

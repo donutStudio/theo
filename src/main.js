@@ -129,7 +129,20 @@ const createWindow = () => {
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       backgroundThrottling: false,
+      nodeIntegration: false,
+      contextIsolation: true,
+      sandbox: true
     },
+  });
+
+  // Load environment variables
+  require('dotenv').config({ path: path.join(__dirname, '../../.env') });
+  
+  // Pass environment variables to renderer
+  mainWindow.webContents.on('did-finish-load', () => {
+    mainWindow.webContents.send('set-env', {
+      GROQ_API_KEY: process.env.GROQ_API_KEY
+    });
   });
 
   mainWindow.setAlwaysOnTop(true, "screen-saver");
