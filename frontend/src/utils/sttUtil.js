@@ -125,7 +125,8 @@ export function initPushToTalk() {
           );
 
           if (!text) {
-            console.error("Empty transcription result");
+            console.error("Empty transcription result - no STT response");
+            sttFallback();
             return;
           }
 
