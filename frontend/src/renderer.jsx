@@ -2,38 +2,35 @@ import { createRoot } from "react-dom/client";
 import { useEffect, useState } from "react";
 import "./index.css";
 import Notch from "./components/notch";
-import startupSound from "./assets/verbalpreset/startup.wav";
+import startupSound from "./assets/verbalpreset/startup2.wav";
 import { initPushToTalk } from "./utils/sttUtil";
-import { initializeGroq } from "./utils/sttService";
 
 const App = () => {
   const [taskbarHeight, setTaskbarHeight] = useState(0);
 
-  // Initialize app
+  // Initialize app - retry if electron isn't ready yet (preload can lag)
   useEffect(() => {
-    // Initialize Groq client with API key from environment variables
-    if (window.electron?.env?.GROQ_API_KEY) {
-      const isInitialized = initializeGroq(window.electron.env.GROQ_API_KEY);
-      console.log("Groq client initialized:", isInitialized);
-    } else {
-      console.error("GROQ_API_KEY not found in environment variables");
-    }
-
-    // Initialize push-to-talk functionality
-    if (window.electron?.ipcRenderer) {
+    function setupPushToTalk() {
+      if (!window.electron?.ipcRenderer) {
+        console.warn("[STT] ipcRenderer not ready, retrying in 500ms...");
+        setTimeout(setupPushToTalk, 500);
+        return;
+      }
       try {
         initPushToTalk();
-        console.log("Push-to-talk initialized");
+        console.log("[STT] Push-to-talk initialized - hold Ctrl+Win to record");
       } catch (err) {
         console.error("Failed to initialize push-to-talk:", err);
       }
     }
+    setupPushToTalk();
 
     // Get taskbar height
     const getTaskbarHeight = async () => {
       if (window.electron?.ipcRenderer) {
         try {
-          const height = await window.electron.ipcRenderer.invoke("get-taskbar-height");
+          const height =
+            await window.electron.ipcRenderer.invoke("get-taskbar-height");
           setTaskbarHeight(height);
         } catch (error) {
           console.error("Failed to get taskbar height:", error);
