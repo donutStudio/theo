@@ -3,22 +3,25 @@
 ## Summary
 Implement a Flask endpoint `/screenshot` that captures the local screen in Python,
 overlays a label-free coordinate grid (minor lines every 10px, major lines every
-100px), losslessly compresses to PNG (best-effort, variable size), and returns
-the image plus screen size metadata so the agent can infer absolute coordinates
-without numeric labels on the grid.
+100px), then downsizes the image to reduce vision token usage and finally keeps
+the result as a PIL Image for in-process LLM usage. The metadata includes the
+original screen size, grid spacing, and a scale factor so the agent can infer
+absolute coordinates without numeric labels on the grid.
 
 ## Goals and Success Criteria
 - Screenshot image includes a readable grid without clutter from labels.
 - Screen width/height are provided so the agent can infer coordinates.
 - Grid spacing supports plus or minus 10-20px accuracy.
 - Processing is fast enough for interactive use.
+- Vision token usage is reduced by downscaling the image.
 
 ## Scope
 In scope:
 - Screenshot capture in backend Python.
 - Grid overlay lines only.
-- PNG lossless compression (best effort).
-- JSON response including screen size metadata.
+- Downscale after grid overlay to reduce tokens.
+- PNG output with Pillow `optimize=True`.
+- In-process return of PIL Image + metadata (no base64).
 
 Out of scope:
 - OCR, semantic UI detection, PyAutoGUI execution (future).
@@ -27,15 +30,8 @@ Out of scope:
 Endpoint: `GET /screenshot`
 
 Response:
-```json
-{
-  "format": "png",
-  "width": 1920,
-  "height": 1080,
-  "grid": { "minor": 10, "major": 100 },
-  "image_base64": "<base64_png>"
-}
-```
+- A PIL Image plus metadata object:
+  - `width`, `height`, `grid.minor`, `grid.major`, `scale`
 
 Failure:
 - `500` with `{ "error": "Failed to capture screenshot" }`
@@ -43,41 +39,42 @@ Failure:
 ## Implementation Details
 
 ### 1) Capture + Grid Overlay (`backend/utils/imageProcessor.py`)
-- Capture using `pyautogui.screenshot()` or `PIL.ImageGrab.grab()`.
+- Capture using `mss` for speed and reliability.
 - Draw grid lines only:
   - Minor every 10px (light, thin).
   - Major every 100px (slightly darker/thicker).
 - No numeric labels.
 
-### 2) Compression
-- Save to PNG with `optimize=True`.
-- Accept variable output size for best-effort lossless compression.
+### 2) Downscale + Keep as PIL
+- Downscale after grid overlay (e.g., `scale = 0.75`) to reduce vision tokens.
+- Keep as a PIL Image for direct handoff to the LLM service.
 
 ### 3) Route Integration (`backend/app.py`)
 - Add `/screenshot` route to call processing function.
-- Return JSON with base64 image + metadata.
+- Return a PIL Image + metadata to the LLM service internally (no base64).
 
 ### 4) Dependencies
-- Add `pillow` and `pyautogui` to `backend/requirements.txt` if missing.
+- Add `mss` and `pillow` to `backend/requirements.txt` if missing.
 
 ## Edge Cases
-- Multi-monitor: capture primary display only for now.
+- Multi-monitor: capture Windows primary display only.
 - Permissions: return clear error on failure.
 
 ## Tests / Manual Verification
 - Call `/screenshot` and verify:
   - JSON fields present.
   - Base64 decodes to PNG.
+  - `scale` matches the actual output dimensions.
   - Grid visible at 10px/100px spacing.
   - Width/height match screen.
 
 ## Public Interface Changes
 - New endpoint: `GET /screenshot`
-- JSON response includes screen size metadata.
+- In-process return of PIL Image + metadata to the LLM service (no base64).
 
 ## Assumptions and Defaults
 - Label-free grid.
 - Spacing: 10px minor, 100px major.
 - Backend Python capture.
-- PNG lossless, best-effort compression.
-- Base64 in JSON response.
+- Downscale after grid overlay for token reduction.
+- PIL Image returned in-process (no base64).
