@@ -242,7 +242,6 @@ const createWindow = () => {
 
   mainWindow.setAlwaysOnTop(true, "screen-saver");
   mainWindow.setVisibleOnAllWorkspaces(true);
-  mainWindow.webContents.openDevTools({ mode: "detach" });
 
   mainWindowRef = mainWindow;
 
