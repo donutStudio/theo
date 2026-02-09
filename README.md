@@ -42,6 +42,7 @@ npm run dev
 ## Notes
 - The backend runs locally at `http://127.0.0.1:5000`.
 - The `/ai` route currently expects `GET` requests with `?user_input=...`.
+- Theo is a moderately sandboxed AI agent that controls PyAutoGUI automation clients. Ensure complete device safety when running tasks.    Theo is not designed for system level tasks. Theo is designed for UX automation.
 
 ## License
 © 2025 Theo. All rights reserved.  

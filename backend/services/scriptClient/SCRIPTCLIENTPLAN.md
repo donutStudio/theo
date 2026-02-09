@@ -31,7 +31,7 @@ Out of scope:
 ## Implementation Details
 
 ### 1) New Module
-Create `backend/services/automation_runner.py` with:
+Create `backend/services/scriptClient.py` with:
 - `validate_script(script: str) -> None | raises`
 - `run_automation_script(script: str) -> dict`
   (returns `{"status": "ok"|"error", "detail": "..."}`)
