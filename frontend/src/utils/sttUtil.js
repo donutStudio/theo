@@ -1,4 +1,5 @@
 import { sttFallback } from "./sttFallback.js";
+import { aiGO } from "./workflow.js";
 
 let mediaRecorder = null;
 let audioChunks = [];
@@ -131,7 +132,7 @@ export function initPushToTalk() {
           }
 
           console.log("Transcription successful:", text);
-          // Main process already logs to terminal via ipcMain.handle
+          await aiGO(text);
         } catch (err) {
           console.error("Error processing recording:", err);
           sttFallback();

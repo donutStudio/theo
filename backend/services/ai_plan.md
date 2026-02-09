@@ -1,11 +1,14 @@
 # AI Service Pipeline Plan (Classifier -> Main LLM -> Execute + TTS)
 
 ## Summary
-Implement an AI service that first classifies user intent using a cheap Groq model
-(llama-3.1-8b-instant), then routes chat/agent requests to the main GPT-5.2 model
-with the screenshot and system prompt. Unsafe requests go to a fallback path.
-The main model returns a PyAutoGUI script and a Theo response separated by
-`---DELIMITER---`, which are executed and spoken back to the user.
+Implement an AI service where the `/ai` route only classifies user intent using a
+cheap Groq model (llama-3.1-8b-instant) and either triggers fallback or hands off
+to `aiGO()`. The `aiGO()` function orchestrates the full loop: notify Electron to
+enable click-through and disable input, capture a screenshot, call the main GPT-5.2
+model with system prompt + user text + image metadata, parse the result into a
+PyAutoGUI script and a Theo response (split by `---DELIMITER---`), execute the
+script, speak the response, then notify Electron to restore input and disable
+click-through.
 
 ## Environment and Config
 - Add `OPENAI_KEY` to `.env` (repo root).
@@ -14,18 +17,19 @@ The main model returns a PyAutoGUI script and a Theo response separated by
 
 ## Core Interfaces
 - `classify_intent(text) -> {"label": "chat|agent|unsafe", "reason": "..."}`
+- `aiGO(user_text, classification) -> status`
 - `build_main_prompt(system_prompt_path, user_text, image, metadata) -> messages`
 - `run_main_llm(messages, model="gpt-5.2") -> raw_output`
 - `parse_llm_output(raw_output) -> { "script": "...", "response": "..." }`
 - `execute_pyautogui(script) -> status`
 - `speak_text(response) -> status`
+- `notify_electron_clickthrough(enabled: bool) -> status`
 
 ## Classifier Integration (Groq)
 - Use `backend/utils/llmclassifer/llmclassifer.py`.
-- Route:
-  - `chat` -> main LLM (no automation).
-  - `agent` -> main LLM (automation + TTS).
-  - `unsafe` -> fallback response + TTS.
+- `/ai` route logic:
+  - If classifier returns `unsafe` -> fallback response + TTS, then stop.
+  - Otherwise -> call `aiGO(user_text, classification)`.
 - On classifier failure, default to `unsafe`.
 
 ## Main LLM Call (OpenAI GPT-5.2)
@@ -45,28 +49,27 @@ The main model returns a PyAutoGUI script and a Theo response separated by
   - Disallow imports, file I/O, network, subprocesses.
 
 ## Execution + TTS
-- `agent`:
-  - Execute script.
+- `aiGO()` handles the full flow:
+  - Notify Electron to enable click-through and disable input.
+  - Capture screenshot.
+  - Call main LLM with prompt + image + metadata.
+  - Parse output into script + response.
+  - If classification is `agent`, execute script.
   - Speak Theo response.
-- `chat`:
-  - Skip script.
-  - Speak Theo response.
-- `unsafe`:
-  - Fallback response + TTS only.
+  - Notify Electron to disable click-through and re-enable input.
 
 ## Flask Endpoint
-- Add `/agent` route that accepts:
-  - User text (STT).
-  - Screenshot image or in-process screenshot pipeline.
-- Returns:
-  - Status and error info.
-  - Theo response.
+- `/ai` route:
+  - Accepts user STT text.
+  - Runs classifier and routes to fallback or `aiGO()`.
+  - Returns status and Theo response.
 
 ## Safety Controls
 - LLM call timeouts.
 - Output token caps.
 - Script sandboxing and allowlist of PyAutoGUI calls.
 - Logging of classifier label and LLM output.
+- Ensure Electron click-through toggles are always reverted (use try/finally).
 
 ## Tests
 - Unit tests:

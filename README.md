@@ -1,20 +1,47 @@
-# Theo.ai: Partial Blindess Accessibility Agent
+# Theo.ai: Partial Blindness Accessibility Agent
 
-**Theo** is a desktop accessibility assistant that lets users perform tasks through natural language commands. Say `"Hey Theo"` and tell it what you need—Theo interprets the screen, generates the necessary automation commands, and executes them while confirming actions via text-to-speech.
+[Official Documentation](https://theodocs.super.site) 
 
----
+**Theo** is a desktop accessibility assistant that lets users perform tasks through
+natural language commands. Hold **Ctrl + Win** to speak: Theo transcribes your
+request, interprets the screen, generates automation commands, executes them, and
+confirms actions via text-to-speech.
 
-## Tech Stack
+## Project Layout
+- `frontend/`: Electron UI + STT (push-to-talk) and fallback UX.
+- `backend/`: Flask server, LLM classifier, main LLM orchestration, PyAutoGUI automation, TTS, and
+  screenshot pipeline.
 
-- **Python**  
-- **PyAutoGUI** – desktop automation  
-- **OpenAI API** – AI command interpretation and code generation  
-- **Speech Recognition / Whisper** – voice input  
-- **pyttsx3** – text-to-speech feedback  
-- **OpenCV (optional)** – coordinate overlays
+## Requirements
+- Python
+- pip
+- Node.js and npm (for the Electron frontend)
+*Assume latest versions for all dependencies
 
-## Branding
-Theo is designed with a soft style, with a light purple accent color and Bricolage Grotesque main font.
+## Environment Variables
+Create a `.env` file in the repo root:
+```
+GROQ_API_KEY=your_groq_key
+OPENAI_KEY=your_openai_key
+```
+
+## Backend Setup
+From `backend/`:
+```
+pip install -r requirements.txt
+python app.py
+```
+
+## Frontend Setup
+From `frontend/`:
+```
+npm install
+npm run dev
+```
+
+## Notes
+- The backend runs locally at `http://127.0.0.1:5000`.
+- The `/ai` route currently expects `GET` requests with `?user_input=...`.
 
 ## License
 © 2025 Theo. All rights reserved.  

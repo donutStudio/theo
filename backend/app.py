@@ -3,11 +3,13 @@ import logging
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, send_file
+from flask import Flask, jsonify, send_file, request
 from flask_cors import CORS
 
-from utils.audioFeedback import play_image_error_sound
-from utils.imageProcessor import image_processor
+from utils.audioFeedback.audioFeedback import play_image_error_sound
+from utils.audioFeedback.audioFeedback import play_warning_sound
+from utils.imageProcessor.imageProcessor import image_processor
+from utils.llmclassifer.llmclassifer import llmclassifier
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
@@ -56,6 +58,19 @@ def screenshot_preview():
         logger.exception("Screenshot preview failed")
         play_image_error_sound()
         return jsonify({"error": "Failed to capture screenshot", "detail": str(e)}), 500
+
+
+@app.route("/ai", methods=["GET"])
+def ai():
+    user_input = request.args.get("user_input")  # grabs ?user_input=...
+    classification = llmclassifier(user_input)
+    if classification == "---UNSAFE---":
+        play_warning_sound()
+        return jsonify("Classification: " + classification), 400
+    else:
+        print(classification)
+        return jsonify("Classification: " + classification), 200 #TODO: implement the ai service
+
 
 if __name__ == "__main__":
     app.run(host="127.0.0.1", port=5000, debug=True)
