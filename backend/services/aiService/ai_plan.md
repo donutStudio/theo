@@ -26,7 +26,7 @@ click-through.
 - `notify_electron_clickthrough(enabled: bool) -> status`
 
 ## Classifier Integration (Groq)
-- Use `backend/utils/llmclassifer/llmclassifer.py`.
+- Use `backend/utils/llmClassifer/llmClassifier.py`.
 - `/ai` route logic:
   - If classifier returns `unsafe` -> fallback response + TTS, then stop.
   - Otherwise -> call `aiGO(user_text, classification)`.
