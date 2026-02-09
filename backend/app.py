@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from flask import Flask, jsonify, send_file
 from flask_cors import CORS
 
+from utils.audioFeedback import play_image_error_sound
 from utils.imageProcessor import image_processor
 
 logging.basicConfig(level=logging.DEBUG)
@@ -38,6 +39,7 @@ def screenshot():
         return jsonify(metadata)
     except Exception as e:
         logger.exception("Screenshot capture failed")
+        play_image_error_sound()
         return jsonify({"error": "Failed to capture screenshot", "detail": str(e)}), 500
 
 
@@ -52,6 +54,7 @@ def screenshot_preview():
         return send_file(buf, mimetype="image/png")
     except Exception as e:
         logger.exception("Screenshot preview failed")
+        play_image_error_sound()
         return jsonify({"error": "Failed to capture screenshot", "detail": str(e)}), 500
 
 if __name__ == "__main__":

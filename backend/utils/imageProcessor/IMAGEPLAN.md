@@ -38,7 +38,7 @@ Failure:
 
 ## Implementation Details
 
-### 1) Capture + Grid Overlay (`backend/utils/imageProcessor.py`)
+### 1) Capture + Grid Overlay (`backend/utils/imageProcessor/imageProcessor.py`)
 - Capture using `mss` for speed and reliability.
 - Draw grid lines only:
   - Minor every 10px (light, thin).
