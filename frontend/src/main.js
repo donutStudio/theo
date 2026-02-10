@@ -110,7 +110,10 @@ let bothKeysReleased = true;
 
 // Short lockout after trigger to avoid key-repeat / double key-down
 const TRIGGER_LOCKOUT_MS = 500;
+// Cooldown after release before next Ctrl+Win can trigger (matches notch.jsx)
+const COOLDOWN_AFTER_RELEASE_MS = 2000;
 let lastTriggerAt = 0;
+let lastReleaseAt = 0;
 
 // Global keyboard listener
 let gkl = null;
@@ -118,6 +121,7 @@ let gkl = null;
 const handleCtrlWinPress = () => {
   const now = Date.now();
   if (now - lastTriggerAt < TRIGGER_LOCKOUT_MS) return;
+  if (lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS) return;
   if (!bothKeysReleased) return;
 
   ctrlWinPressed = true;
@@ -136,6 +140,7 @@ const handleCtrlWinRelease = () => {
   if (!ctrlWinPressed) return;
 
   ctrlWinPressed = false;
+  lastReleaseAt = Date.now();
 
   if (mainWindowRef?.webContents) {
     mainWindowRef.webContents.send("ctrl-win-key-up");

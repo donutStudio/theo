@@ -13,9 +13,10 @@ function Notch({ taskbarHeight = 0 }) {
   const helpCenterDialogRef = useRef(null);
   const ping1Audio = useRef(null);
   const ping2Audio = useRef(null);
-  // Renderer-side cooldown to avoid spamming when window has focus
+  // Refs for cooldown and hold state (avoid stale closures in IPC/keyboard handlers)
   const CTRL_WIN_COOLDOWN_MS = 2000;
   const lastCtrlWinAtRef = useRef(0);
+  const isHoldingRef = useRef(false);
   const isRight = position.includes("right");
   const isBottom = position.includes("bottom");
   const containerSideClass = isRight ? "right-0" : "left-0";
@@ -42,54 +43,43 @@ function Notch({ taskbarHeight = 0 }) {
   }, []);
 
   // Listen for Ctrl+Win key events from main process (works even when window doesn't have focus)
+  // Use refs only so handlers are stable and never see stale state.
   useEffect(() => {
-    if (window.electron?.ipcRenderer) {
-      const handleCtrlWinKeyDown = () => {
-        // Respect renderer-side cooldown
-        if (Date.now() - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS)
-          return;
+    if (!window.electron?.ipcRenderer) return;
 
-        if (!isCtrlWinHeld) {
-          setIsCtrlWinHeld(true);
-          // Play ping1 when Ctrl+Win is pressed
-          if (ping1Audio.current) {
-            ping1Audio.current.currentTime = 0;
-            ping1Audio.current.play().catch((err) => {
-              console.error("Error playing ping1:", err);
-            });
-          }
-        }
-      };
+    const handleCtrlWinKeyDown = () => {
+      const now = Date.now();
+      if (now - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS) return;
+      if (isHoldingRef.current) return; // already in a hold (ignore repeat)
 
-      const handleCtrlWinKeyUp = () => {
-        if (isCtrlWinHeld) {
-          setIsCtrlWinHeld(false);
-          // Record toggle time and play ping2 when Ctrl+Win is released
-          lastCtrlWinAtRef.current = Date.now();
-          if (ping2Audio.current) {
-            ping2Audio.current.currentTime = 0;
-            ping2Audio.current.play().catch((err) => {
-              console.error("Error playing ping2:", err);
-            });
-          }
-        }
-      };
+      isHoldingRef.current = true;
+      setIsCtrlWinHeld(true);
+      if (ping1Audio.current) {
+        ping1Audio.current.currentTime = 0;
+        ping1Audio.current.play().catch((err) => console.error("Error playing ping1:", err));
+      }
+    };
 
-      window.electron.ipcRenderer.on("ctrl-win-key-down", handleCtrlWinKeyDown);
-      window.electron.ipcRenderer.on("ctrl-win-key-up", handleCtrlWinKeyUp);
+    const handleCtrlWinKeyUp = () => {
+      if (!isHoldingRef.current) return;
 
-      return () => {
-        window.electron.ipcRenderer.removeListener(
-          "ctrl-win-key-down",
-          handleCtrlWinKeyDown,
-        );
-        window.electron.ipcRenderer.removeListener(
-          "ctrl-win-key-up",
-          handleCtrlWinKeyUp,
-        );
-      };
-    }
-  }, [isCtrlWinHeld]);
+      isHoldingRef.current = false;
+      lastCtrlWinAtRef.current = Date.now();
+      setIsCtrlWinHeld(false);
+      if (ping2Audio.current) {
+        ping2Audio.current.currentTime = 0;
+        ping2Audio.current.play().catch((err) => console.error("Error playing ping2:", err));
+      }
+    };
+
+    window.electron.ipcRenderer.on("ctrl-win-key-down", handleCtrlWinKeyDown);
+    window.electron.ipcRenderer.on("ctrl-win-key-up", handleCtrlWinKeyUp);
+
+    return () => {
+      window.electron.ipcRenderer.removeListener("ctrl-win-key-down", handleCtrlWinKeyDown);
+      window.electron.ipcRenderer.removeListener("ctrl-win-key-up", handleCtrlWinKeyUp);
+    };
+  }, []);
 
   // Help center dialog: show/close when helpCenterOpen changes
   useEffect(() => {
@@ -105,51 +95,34 @@ function Notch({ taskbarHeight = 0 }) {
     }
   }, [helpCenterOpen]);
 
-  // Fallback: Listen for keyboard events when window has focus
+  // Fallback: Listen for keyboard events when window has focus (use refs, no stale state)
   useEffect(() => {
     const handleKeyDown = (e) => {
-      // Check for Ctrl+Win (Windows key is Meta on some systems)
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        (e.key === "Meta" || e.key === "Win" || e.metaKey) &&
-        !isCtrlWinHeld
-      ) {
-        // Respect renderer-side cooldown
-        if (Date.now() - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS)
-          return;
+      if (isHoldingRef.current) return;
+      const both = (e.ctrlKey || e.metaKey) && (e.key === "Meta" || e.key === "Win" || e.metaKey);
+      if (!both) return;
+      if (!(e.ctrlKey && (e.metaKey || e.key === "Meta" || e.key === "Win"))) return;
 
-        // Make sure both Ctrl and Win are pressed
-        if (
-          (e.ctrlKey && (e.metaKey || e.key === "Meta" || e.key === "Win")) ||
-          (e.metaKey && e.ctrlKey)
-        ) {
-          setIsCtrlWinHeld(true);
-          // Play ping1 when Ctrl+Win is pressed
-          if (ping1Audio.current) {
-            ping1Audio.current.currentTime = 0;
-            ping1Audio.current.play().catch((err) => {
-              console.error("Error playing ping1:", err);
-            });
-          }
-        }
+      if (Date.now() - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS) return;
+
+      isHoldingRef.current = true;
+      setIsCtrlWinHeld(true);
+      if (ping1Audio.current) {
+        ping1Audio.current.currentTime = 0;
+        ping1Audio.current.play().catch((err) => console.error("Error playing ping1:", err));
       }
     };
 
     const handleKeyUp = (e) => {
-      // Check if Ctrl or Win key is released
-      if (
-        (e.key === "Control" || e.key === "Meta" || e.key === "Win") &&
-        isCtrlWinHeld
-      ) {
-        setIsCtrlWinHeld(false);
-        // Record toggle time and play ping2 when Ctrl+Win is released
-        lastCtrlWinAtRef.current = Date.now();
-        if (ping2Audio.current) {
-          ping2Audio.current.currentTime = 0;
-          ping2Audio.current.play().catch((err) => {
-            console.error("Error playing ping2:", err);
-          });
-        }
+      if (!(e.key === "Control" || e.key === "Meta" || e.key === "Win")) return;
+      if (!isHoldingRef.current) return;
+
+      isHoldingRef.current = false;
+      lastCtrlWinAtRef.current = Date.now();
+      setIsCtrlWinHeld(false);
+      if (ping2Audio.current) {
+        ping2Audio.current.currentTime = 0;
+        ping2Audio.current.play().catch((err) => console.error("Error playing ping2:", err));
       }
     };
 
@@ -160,7 +133,7 @@ function Notch({ taskbarHeight = 0 }) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, [isCtrlWinHeld]);
+  }, []);
 
   return (
     <div

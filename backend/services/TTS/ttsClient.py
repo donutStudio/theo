@@ -1,0 +1,51 @@
+"""
+Thin TTS client that generates speech from text and plays it back.
+Uses sounddevice + soundfile for playback (same as audioFeedback) so TTS WAV
+formats from Groq are supported; winsound often fails with these.
+"""
+import logging
+from pathlib import Path
+from typing import Optional
+
+from .tts import synthesize_tts
+
+logger = logging.getLogger(__name__)
+
+
+def _play_wav(path: Path, async_play: bool = False) -> None:
+    path = path.resolve()
+    if not path.is_file():
+        logger.warning("TTS WAV not found at %s", path)
+        return
+
+    def _do_play() -> None:
+        try:
+            import sounddevice as sd
+            import soundfile as sf
+            data, sample_rate = sf.read(path)
+            if data.dtype.kind == "i":
+                data = data.astype("float32") / (2 ** (data.dtype.itemsize * 8 - 1))
+            elif data.dtype != "float32":
+                data = data.astype("float32")
+            if data.ndim == 1:
+                data = data.reshape(-1, 1)
+            sd.play(data, sample_rate)
+            sd.wait()
+        except Exception as e:
+            logger.warning("Could not play TTS WAV %s: %s", path, e)
+
+    if async_play:
+        import threading
+        threading.Thread(target=_do_play, daemon=True).start()
+    else:
+        _do_play()
+
+
+def speak_text(text: str, out_path: Optional[Path] = None, async_play: bool = False) -> Path:
+    """
+    Generate TTS for text and play it back.
+    Returns the path to the generated WAV file.
+    """
+    audio_path = synthesize_tts(text, out_path=out_path)
+    _play_wav(audio_path, async_play=async_play)
+    return audio_path
