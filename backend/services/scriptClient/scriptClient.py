@@ -23,12 +23,21 @@ logger = logging.getLogger(__name__)
 ALLOWED_IMPORTS = frozenset({"pyautogui", "time", "random", "math", "PIL"})
 
 # Blocked builtins (not provided in exec globals)
-BLOCKED_BUILTINS = frozenset({"open", "eval", "exec", "__import__"})
+BLOCKED_BUILTINS = frozenset({"open", "eval", "exec"})
+
+
+def _safe_import(name: str, globals=None, locals=None, fromlist=(), level=0):
+    """Restricted __import__ that only allows allowlisted modules."""
+    mod = name.split(".", 1)[0]
+    if not _allowed_module(name) and not _allowed_module(mod):
+        raise ImportError(f"Import not allowed: {name!r}")
+    return builtins.__import__(name, globals, locals, fromlist, level)
 
 
 def _safe_builtins() -> dict[str, Any]:
-    """Builtins dict with dangerous names removed."""
+    """Builtins dict with dangerous names removed; allow restricted __import__."""
     safe = {k: v for k, v in builtins.__dict__.items() if k not in BLOCKED_BUILTINS}
+    safe["__import__"] = _safe_import
     return safe
 
 

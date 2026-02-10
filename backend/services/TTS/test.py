@@ -8,4 +8,4 @@ if str(ROOT) not in sys.path:
 from backend.services.TTS.ttsClient import speak_text
 
 
-speak_text("Alright, let me get that for you!")
+speak_text("I’m opening the system clock in the bottom-right corner of your screen so the date information appears. If you’d like, I can read out the day of the week for you as well.")
