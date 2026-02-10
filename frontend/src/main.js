@@ -16,7 +16,7 @@ const __dirname = dirname(__filename);
 // Load .env from project root (theo/.env, outside frontend and backend)
 dotenv.config({ path: join(__dirname, "../../../.env") });
 
-import { app, BrowserWindow, Menu, screen, ipcMain } from "electron";
+import { app, BrowserWindow, Menu, screen, ipcMain, shell } from "electron";
 import path from "node:path";
 import { createRequire } from "node:module";
 import started from "electron-squirrel-startup";
@@ -33,6 +33,17 @@ if (started) {
 ipcMain.handle("get-taskbar-height", () => {
   const primaryDisplay = screen.getPrimaryDisplay();
   return primaryDisplay.size.height - primaryDisplay.workAreaSize.height;
+});
+
+// Open URL in the system's default browser (not in Electron)
+ipcMain.handle("open-external", (_event, url) => {
+  if (url && typeof url === "string") shell.openExternal(url);
+});
+
+// Screen size for dialogs (scale popup to slightly smaller than screen)
+ipcMain.handle("get-screen-size", () => {
+  const { width, height } = screen.getPrimaryDisplay().size;
+  return { width, height };
 });
 
 // Global reference to main window
@@ -227,6 +238,7 @@ const createWindow = () => {
       nodeIntegration: false,
       contextIsolation: true,
       sandbox: true,
+      webviewTag: true,
     },
   });
 

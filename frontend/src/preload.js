@@ -17,6 +17,8 @@ ipcRenderer.on('set-env', (event, newEnv) => {
 // Expose to renderer
 contextBridge.exposeInMainWorld("electron", {
   env,
+  openExternal: (url) => ipcRenderer.invoke("open-external", url),
+  getScreenSize: () => ipcRenderer.invoke("get-screen-size"),
   ipcRenderer: {
     send: (channel, ...args) => ipcRenderer.send(channel, ...args),
     invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),

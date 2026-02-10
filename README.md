@@ -2,6 +2,8 @@
 
 [Official Documentation](https://theodocs.super.site) 
 
+*Note that Theo currently only has support for Windows operating systems.*
+
 **Theo** is a desktop accessibility assistant that lets users perform tasks through
 natural language commands. Hold **Ctrl + Win** to speak: Theo transcribes your
 request, interprets the screen, generates automation commands, executes them, and

@@ -8,6 +8,9 @@ function Notch({ taskbarHeight = 0 }) {
   const [isHovered, setIsHovered] = useState(false);
   const [position, setPosition] = useState("bottom-left");
   const [isCtrlWinHeld, setIsCtrlWinHeld] = useState(false);
+  const [helpCenterOpen, setHelpCenterOpen] = useState(false);
+  const [screenSize, setScreenSize] = useState({ width: 1920, height: 1080 });
+  const helpCenterDialogRef = useRef(null);
   const ping1Audio = useRef(null);
   const ping2Audio = useRef(null);
   // Renderer-side cooldown to avoid spamming when window has focus
@@ -87,6 +90,20 @@ function Notch({ taskbarHeight = 0 }) {
       };
     }
   }, [isCtrlWinHeld]);
+
+  // Help center dialog: show/close when helpCenterOpen changes
+  useEffect(() => {
+    const dialog = helpCenterDialogRef.current;
+    if (!dialog) return;
+    if (helpCenterOpen) {
+      window.electron?.getScreenSize?.().then((size) => {
+        if (size?.width && size?.height) setScreenSize(size);
+      });
+      dialog.showModal();
+    } else {
+      dialog.close();
+    }
+  }, [helpCenterOpen]);
 
   // Fallback: Listen for keyboard events when window has focus
   useEffect(() => {
@@ -228,12 +245,16 @@ function Notch({ taskbarHeight = 0 }) {
                   For caregivers:
                 </h3>
                 <div className="brandbg border border-black rounded-2xl p-3.5">
-                  <a href="#">
+                  <button
+                    type="button"
+                    className="text-left w-full cursor-pointer hover:underline focus:outline-none focus:underline"
+                    onClick={() => setHelpCenterOpen(true)}
+                  >
                     <p className="text-black inter  text-sm  mt-1.5">
                       Learn how you and your assisted individual can use Theo to
                       enhance your work.
                     </p>
-                  </a>
+                  </button>
                 </div>
               </div>
               <img
@@ -244,6 +265,42 @@ function Notch({ taskbarHeight = 0 }) {
               />
             </div>
           </div>
+        </div>
+      </dialog>
+
+      {/* Help center: popup with webview, scaled to screen with margin, large close X */}
+      <dialog
+        ref={helpCenterDialogRef}
+        className="modal p-0 bg-black/50 border-0 flex items-center justify-center"
+        onCancel={() => setHelpCenterOpen(false)}
+        onClick={(e) => {
+          if (e.target === helpCenterDialogRef.current) setHelpCenterOpen(false);
+        }}
+      >
+        <div
+          className="relative rounded-2xl overflow-hidden border-2 border-black bg-white shadow-2xl flex flex-col"
+          style={(() => {
+            const maxW = screenSize.width * 0.9;
+            const maxH = screenSize.height * 0.9;
+            const w = Math.min(maxW, maxH * (16 / 9));
+            const h = w * (9 / 16);
+            return { width: w, height: h };
+          })()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute top-3 right-3 z-50 w-14 h-14 flex items-center justify-center rounded-full bg-black/80 hover:bg-black text-white border-2 border-white shadow-lg transition-colors"
+            onClick={() => setHelpCenterOpen(false)}
+          >
+            <i className="bi bi-x text-3xl font-bold" />
+          </button>
+          <webview
+            src="https://theodocs.super.site/theo-help-center"
+            className="w-full flex-1 min-h-0"
+            style={{ minHeight: 0 }}
+          />
         </div>
       </dialog>
       {/* SEPERATION */}
