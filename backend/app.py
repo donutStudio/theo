@@ -9,7 +9,7 @@ from flask_cors import CORS
 from utils.audioFeedback.audioFeedback import play_image_error_sound
 from utils.audioFeedback.audioFeedback import play_warning_sound
 from utils.imageProcessor.imageProcessor import image_processor
-from utils.llmClassifer.llmClassifier import llmclassifier
+from utils.llmclassifer.llmClassifier import llmclassifier
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
