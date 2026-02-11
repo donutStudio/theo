@@ -10,7 +10,6 @@ function log(message, data) {
   console.log(`[STT] ${message}`, data || "");
 }
 
-// Clean up resources
 function cleanup() {
   if (stream) {
     stream.getTracks().forEach((track) => track.stop());
@@ -27,10 +26,10 @@ function cleanup() {
 export function initPushToTalk() {
   log("Initializing push-to-talk...");
 
-  // Clean up any existing resources
   cleanup();
 
-  // Start recording when main process sends ctrl-win-key-down
+  // start talking
+
   window.electron.ipcRenderer.on("ctrl-win-key-down", async () => {
     log("Received ctrl-win-key-down - requesting microphone...");
     if (isRecording) {
@@ -76,7 +75,6 @@ export function initPushToTalk() {
         log("Recording stopped");
       };
 
-      // Start recording with timeslice to get chunks
       mediaRecorder.start(100);
       log("Recording started");
     } catch (err) {
@@ -86,7 +84,7 @@ export function initPushToTalk() {
     }
   });
 
-  // Stop recording
+  // Stop talking
   window.electron.ipcRenderer.on("ctrl-win-key-up", async () => {
     if (!isRecording || !mediaRecorder) {
       log("Not recording or no media recorder, ignoring stop");
@@ -141,7 +139,6 @@ export function initPushToTalk() {
         }
       };
 
-      // Request any remaining data, then stop (onstop will fire)
       recorder.requestData();
       recorder.stop();
     } catch (err) {
@@ -151,7 +148,7 @@ export function initPushToTalk() {
     }
   });
 
-  // Clean up on window unload
+  // clean up on window unload
   window.addEventListener("beforeunload", cleanup);
 
   log("Push-to-talk initialized");

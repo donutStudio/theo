@@ -5,6 +5,27 @@ import Notch from "./components/notch";
 import startupSound from "./assets/verbalpreset/startup2.wav";
 import { initPushToTalk } from "./utils/sttUtil";
 
+async function setInputLock(lock) {
+  if (!window.electron?.ipcRenderer?.invoke) return;
+  try {
+    await window.electron.ipcRenderer.invoke("set-input-lock", { lock });
+  } catch (err) {
+    console.error("[APP] Failed to update input lock:", err);
+  }
+}
+
+function waitForAudioEnd(audio) {
+  return new Promise((resolve) => {
+    const done = () => {
+      audio.removeEventListener("ended", done);
+      audio.removeEventListener("error", done);
+      resolve();
+    };
+    audio.addEventListener("ended", done, { once: true });
+    audio.addEventListener("error", done, { once: true });
+  });
+}
+
 const App = () => {
   const [taskbarHeight, setTaskbarHeight] = useState(0);
 
@@ -25,7 +46,6 @@ const App = () => {
     }
     setupPushToTalk();
 
-    // Get taskbar height
     const getTaskbarHeight = async () => {
       if (window.electron?.ipcRenderer) {
         try {
@@ -41,15 +61,24 @@ const App = () => {
     getTaskbarHeight();
   }, []);
 
-  // Play startup sound once when app mounts
   useEffect(() => {
-    try {
+    const playStartup = async () => {
       const audio = new Audio(startupSound);
       audio.currentTime = 0;
-      audio.play().catch((err) => console.error("Startup sound error:", err));
-    } catch (err) {
+      await setInputLock(true);
+      try {
+        await audio.play();
+        await waitForAudioEnd(audio);
+      } catch (err) {
+        console.error("Startup sound error:", err);
+      } finally {
+        await setInputLock(false);
+      }
+    };
+
+    playStartup().catch((err) => {
       console.error("Failed to play startup sound:", err);
-    }
+    });
   }, []);
 
   return (

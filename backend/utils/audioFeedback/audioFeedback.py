@@ -1,22 +1,15 @@
-"""
-Backend-based fallback sounds. All verbal preset WAV playback for the backend
-lives here (e.g. outerror.wav on image failure, warning.wav for warnings).
-Uses sounddevice + soundfile for playback (supports many WAV formats).
-"""
+#Backend-based fallback sounds.
+
 import logging
-import sys
 import threading
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
-# WAV files live in this package directory (same folder as this module)
 _ASSETS_DIR = Path(__file__).resolve().parent
 
 
-def _play_wav(filename: str) -> None:
-    """Play a WAV from this package's directory in a background thread.
-    Uses sounddevice + soundfile so many WAV formats are supported."""
+def _play_wav(filename: str, blocking: bool = False) -> None:
     def _play():
         try:
             path = (_ASSETS_DIR / filename).resolve()
@@ -39,14 +32,15 @@ def _play_wav(filename: str) -> None:
         except Exception as e:
             logger.warning("Could not play %s: %s", filename, e)
 
+    if blocking:
+        _play()
+        return
     threading.Thread(target=_play, daemon=True).start()
 
 
-def play_image_error_sound() -> None:
-    """Play outerror.wav (e.g. when image processing fails)."""
-    _play_wav("outerror.wav")
+def play_image_error_sound(blocking: bool = False) -> None:
+    _play_wav("outerror.wav", blocking=blocking)
 
 
-def play_warning_sound() -> None:
-    """Play warning.wav for backend warning conditions."""
-    _play_wav("warning.wav")
+def play_warning_sound(blocking: bool = False) -> None:
+    _play_wav("warning.wav", blocking=blocking)

@@ -14,7 +14,7 @@ from utils.llmClassifer.llmClassifier import llmclassifier
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-# Load .env from project root (theo/.env, outside frontend and backend)
+# Load .env for keys
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 app = Flask(__name__)
@@ -31,7 +31,6 @@ def screenshot():
     """Capture screen with grid overlay; return PIL Image + metadata in-process (no base64)."""
     try:
         result = image_processor()
-        # PIL Image is in result["image"] for in-process LLM use; return metadata only as JSON
         metadata = {
             "width": result["width"],
             "height": result["height"],
@@ -62,10 +61,11 @@ def screenshot_preview():
 
 @app.route("/ai", methods=["GET"])
 def ai():
-    user_input = request.args.get("user_input")  # grabs ?user_input=...
+    user_input = request.args.get("user_input")  # grabs ?user_input=... (url query param)
     classification = llmclassifier(user_input)
     if classification == "---UNSAFE---":
-        play_warning_sound()
+        # Keep /ai request blocked until warning audio ends so frontend lock stays active.
+        play_warning_sound(blocking=True)
         return jsonify("Classification: " + classification), 400
     else:
         print(classification)

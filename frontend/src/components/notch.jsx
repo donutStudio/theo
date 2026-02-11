@@ -9,11 +9,14 @@ function Notch({ taskbarHeight = 0 }) {
   const [position, setPosition] = useState("bottom-left");
   const [isCtrlWinHeld, setIsCtrlWinHeld] = useState(false);
   const [helpCenterOpen, setHelpCenterOpen] = useState(false);
+  const [clickThroughEnabled, setClickThroughEnabled] = useState(false);
   const [screenSize, setScreenSize] = useState({ width: 1920, height: 1080 });
   const helpCenterDialogRef = useRef(null);
+  const humanInputConfirmRef = useRef(null);
+  const notchContainerRef = useRef(null);
   const ping1Audio = useRef(null);
   const ping2Audio = useRef(null);
-  // Refs for cooldown and hold state (avoid stale closures in IPC/keyboard handlers)
+  // configs for input cooldowns and states
   const CTRL_WIN_COOLDOWN_MS = 2000;
   const lastCtrlWinAtRef = useRef(0);
   const isHoldingRef = useRef(false);
@@ -32,7 +35,20 @@ function Notch({ taskbarHeight = 0 }) {
       : "w-full border border-gray-400 p-5 inter rounded-2xl flex justify-between items-center";
   const tooltipDirClass = isBottom ? "" : "tooltip-bottom";
 
-  // Initialize audio objects
+  const isInputLocked = async () => {
+    if (!window.electron?.ipcRenderer?.invoke) return false;
+    try {
+      const state = await window.electron.ipcRenderer.invoke(
+        "get-input-lock-state",
+      );
+      return Boolean(state?.locked);
+    } catch (err) {
+      console.error("[UI] Failed to get input lock state:", err);
+      return false;
+    }
+  };
+
+  // audio objects
   useEffect(() => {
     ping1Audio.current = new Audio(ping1);
     ping2Audio.current = new Audio(ping2);
@@ -42,25 +58,36 @@ function Notch({ taskbarHeight = 0 }) {
     ping2Audio.current.load();
   }, []);
 
-  // Listen for Ctrl+Win key events from main process (works even when window doesn't have focus)
-  // Use refs only so handlers are stable and never see stale state.
+  // Listen for Ctrl+Win key events
   useEffect(() => {
     if (!window.electron?.ipcRenderer) return;
 
-    const handleCtrlWinKeyDown = () => {
+    const handleCtrlWinKeyDown = async () => {
+      if (await isInputLocked()) {
+        isHoldingRef.current = false;
+        setIsCtrlWinHeld(false);
+        return;
+      }
       const now = Date.now();
       if (now - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS) return;
-      if (isHoldingRef.current) return; // already in a hold (ignore repeat)
+      if (isHoldingRef.current) return;
 
       isHoldingRef.current = true;
       setIsCtrlWinHeld(true);
       if (ping1Audio.current) {
         ping1Audio.current.currentTime = 0;
-        ping1Audio.current.play().catch((err) => console.error("Error playing ping1:", err));
+        ping1Audio.current
+          .play()
+          .catch((err) => console.error("Error playing ping1:", err));
       }
     };
 
-    const handleCtrlWinKeyUp = () => {
+    const handleCtrlWinKeyUp = async () => {
+      if (await isInputLocked()) {
+        isHoldingRef.current = false;
+        setIsCtrlWinHeld(false);
+        return;
+      }
       if (!isHoldingRef.current) return;
 
       isHoldingRef.current = false;
@@ -68,20 +95,42 @@ function Notch({ taskbarHeight = 0 }) {
       setIsCtrlWinHeld(false);
       if (ping2Audio.current) {
         ping2Audio.current.currentTime = 0;
-        ping2Audio.current.play().catch((err) => console.error("Error playing ping2:", err));
+        ping2Audio.current
+          .play()
+          .catch((err) => console.error("Error playing ping2:", err));
       }
+    };
+
+    const handleInputLockChanged = ({ locked }) => {
+      if (!locked) return;
+      isHoldingRef.current = false;
+      setIsCtrlWinHeld(false);
     };
 
     window.electron.ipcRenderer.on("ctrl-win-key-down", handleCtrlWinKeyDown);
     window.electron.ipcRenderer.on("ctrl-win-key-up", handleCtrlWinKeyUp);
+    window.electron.ipcRenderer.on(
+      "input-lock-changed",
+      handleInputLockChanged,
+    );
 
     return () => {
-      window.electron.ipcRenderer.removeListener("ctrl-win-key-down", handleCtrlWinKeyDown);
-      window.electron.ipcRenderer.removeListener("ctrl-win-key-up", handleCtrlWinKeyUp);
+      window.electron.ipcRenderer.removeListener(
+        "ctrl-win-key-down",
+        handleCtrlWinKeyDown,
+      );
+      window.electron.ipcRenderer.removeListener(
+        "ctrl-win-key-up",
+        handleCtrlWinKeyUp,
+      );
+      window.electron.ipcRenderer.removeListener(
+        "input-lock-changed",
+        handleInputLockChanged,
+      );
     };
   }, []);
 
-  // Help center dialog: show/close when helpCenterOpen changes
+  // Help center dialog
   useEffect(() => {
     const dialog = helpCenterDialogRef.current;
     if (!dialog) return;
@@ -95,13 +144,39 @@ function Notch({ taskbarHeight = 0 }) {
     }
   }, [helpCenterOpen]);
 
-  // Fallback: Listen for keyboard events when window has focus (use refs, no stale state)
   useEffect(() => {
-    const handleKeyDown = (e) => {
+    if (!window.electron?.setNotchBounds || !notchContainerRef.current) return;
+    const el = notchContainerRef.current;
+    const send = () => {
+      const r = el.getBoundingClientRect();
+      window.electron.setNotchBounds({
+        x: r.x,
+        y: r.y,
+        width: r.width,
+        height: r.height,
+      });
+    };
+    send();
+    const ro = new ResizeObserver(send);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [position, isHovered, clickThroughEnabled]);
+
+  useEffect(() => {
+    const handleKeyDown = async (e) => {
+      if (clickThroughEnabled) return;
+      if (await isInputLocked()) {
+        isHoldingRef.current = false;
+        setIsCtrlWinHeld(false);
+        return;
+      }
       if (isHoldingRef.current) return;
-      const both = (e.ctrlKey || e.metaKey) && (e.key === "Meta" || e.key === "Win" || e.metaKey);
+      const both =
+        (e.ctrlKey || e.metaKey) &&
+        (e.key === "Meta" || e.key === "Win" || e.metaKey);
       if (!both) return;
-      if (!(e.ctrlKey && (e.metaKey || e.key === "Meta" || e.key === "Win"))) return;
+      if (!(e.ctrlKey && (e.metaKey || e.key === "Meta" || e.key === "Win")))
+        return;
 
       if (Date.now() - lastCtrlWinAtRef.current < CTRL_WIN_COOLDOWN_MS) return;
 
@@ -109,11 +184,19 @@ function Notch({ taskbarHeight = 0 }) {
       setIsCtrlWinHeld(true);
       if (ping1Audio.current) {
         ping1Audio.current.currentTime = 0;
-        ping1Audio.current.play().catch((err) => console.error("Error playing ping1:", err));
+        ping1Audio.current
+          .play()
+          .catch((err) => console.error("Error playing ping1:", err));
       }
     };
 
-    const handleKeyUp = (e) => {
+    const handleKeyUp = async (e) => {
+      if (clickThroughEnabled) return;
+      if (await isInputLocked()) {
+        isHoldingRef.current = false;
+        setIsCtrlWinHeld(false);
+        return;
+      }
       if (!(e.key === "Control" || e.key === "Meta" || e.key === "Win")) return;
       if (!isHoldingRef.current) return;
 
@@ -122,7 +205,9 @@ function Notch({ taskbarHeight = 0 }) {
       setIsCtrlWinHeld(false);
       if (ping2Audio.current) {
         ping2Audio.current.currentTime = 0;
-        ping2Audio.current.play().catch((err) => console.error("Error playing ping2:", err));
+        ping2Audio.current
+          .play()
+          .catch((err) => console.error("Error playing ping2:", err));
       }
     };
 
@@ -133,16 +218,17 @@ function Notch({ taskbarHeight = 0 }) {
       window.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("keyup", handleKeyUp);
     };
-  }, []);
+  }, [clickThroughEnabled]);
 
   return (
     <div
+      ref={notchContainerRef}
       className={`fixed ${containerSideClass} ${rowDirClass} flex items-center gap-2 mx-4 transition-all duration-300 ease-in-out`}
       style={verticalStyle}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Main notch button */}
+      {/* main notch button */}
       <div
         className={`w-15 h-15 p-2 border brandborderdark rounded-full flex items-center justify-center brandbgdark shrink-0 ${overlapMargin} z-10 relative`}
       >
@@ -154,35 +240,61 @@ function Notch({ taskbarHeight = 0 }) {
         />
       </div>
 
-      {/* Expanded buttons container */}
+      {/* expanded buttons container */}
       <div
         className={`flex bric items-center gap-2 overflow transition-all duration-300 ease-in-out border brandborderdark brandbgdark h-15 rounded-full ${padClass} relative z-0 ${
           isHovered ? "max-w-96 opacity-100" : "max-w-0 opacity-0"
         }`}
       >
-        <div
-          className={`tooltip border ${tooltipDirClass}`}
-          data-tip="Settings"
-        >
-          <button className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0">
-            <i className="bi bi-gear-fill"></i>
-          </button>
-        </div>
-        <div className={`tooltip ${tooltipDirClass}`} data-tip="Help">
-          <button
-            onClick={() => document.getElementById("helpmodal").showModal()}
-            className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
-          >
-            <i className="bi bi-info-circle-fill"></i>
-          </button>
-        </div>
+        {!clickThroughEnabled && (
+          <>
+            <div
+              className={`tooltip border ${tooltipDirClass}`}
+              data-tip="Settings"
+            >
+              <button className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0">
+                <i className="bi bi-gear-fill"></i>
+              </button>
+            </div>
+            <div className={`tooltip ${tooltipDirClass}`} data-tip="Help">
+              <button
+                onClick={() => document.getElementById("helpmodal").showModal()}
+                className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
+              >
+                <i className="bi bi-info-circle-fill"></i>
+              </button>
+            </div>
+            <div className={`tooltip ${tooltipDirClass}`} data-tip="Move Theo">
+              <button
+                onClick={() => document.getElementById("movemodal").showModal()}
+                className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
+              >
+                <i className="bi bi-arrows-move"></i>
+              </button>
+            </div>
+          </>
+        )}
 
-        <div className={`tooltip ${tooltipDirClass}`} data-tip="Move Theo">
+        <div
+          className={`tooltip ${tooltipDirClass}`}
+          data-tip={
+            clickThroughEnabled ? "Disable Human Input" : "Enable Human Input"
+          }
+        >
           <button
-            onClick={() => document.getElementById("movemodal").showModal()}
+            onClick={() => {
+              if (clickThroughEnabled) {
+                window.electron?.setClickThrough?.(false);
+                setClickThroughEnabled(false);
+              } else {
+                humanInputConfirmRef.current?.showModal();
+              }
+            }}
             className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
           >
-            <i className="bi bi-arrows-move"></i>
+            <i
+              className={`bi ${clickThroughEnabled ? "bi-hand-index-thumb-fill" : "bi-hand-index-thumb"}`}
+            ></i>
           </button>
         </div>
 
@@ -241,13 +353,14 @@ function Notch({ taskbarHeight = 0 }) {
         </div>
       </dialog>
 
-      {/* Help center: popup with webview, scaled to screen with margin, large close X */}
+      {/* Help center:*/}
       <dialog
         ref={helpCenterDialogRef}
         className="modal p-0 bg-black/50 border-0 flex items-center justify-center"
         onCancel={() => setHelpCenterOpen(false)}
         onClick={(e) => {
-          if (e.target === helpCenterDialogRef.current) setHelpCenterOpen(false);
+          if (e.target === helpCenterDialogRef.current)
+            setHelpCenterOpen(false);
         }}
       >
         <div
@@ -276,7 +389,45 @@ function Notch({ taskbarHeight = 0 }) {
           />
         </div>
       </dialog>
-      {/* SEPERATION */}
+
+      <dialog ref={humanInputConfirmRef} className="modal" onCancel={() => {}}>
+        <div className="modal-box brandbg border-2 rounded-4xl p-8 border-black relative">
+          <form method="dialog" className="absolute top-4 right-4">
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm p-0 w-8 h-8 min-h-0 border-0 hover:bg-transparent hover:border-0 hover:scale-100"
+              onClick={() => humanInputConfirmRef.current?.close()}
+            >
+              <i className="bi bi-x-circle-fill text-2xl"></i>
+            </button>
+          </form>
+          <h3 className="font-semibold text-3xl bric">Are you sure?</h3>
+          <p className="text-gray-500 inter text-sm font-light mt-1.5 ">
+            Theo blocks human input by default for safety reasons. Disabling it
+            will also disable Theo temporarily.
+          </p>
+          <div className="mt-6 flex gap-1 justify-end">
+            <button
+              type="button"
+              className="btn btn-ghost border border-gray-400 rounded-full hover:bg-gray-100"
+              onClick={() => humanInputConfirmRef.current?.close()}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn bric tracking-wide brandbgdark text-white border-0 rounded-full"
+              onClick={() => {
+                humanInputConfirmRef.current?.close();
+                window.electron?.setClickThrough?.(true);
+                setClickThroughEnabled(true);
+              }}
+            >
+              Take control of your computer
+            </button>
+          </div>
+        </div>
+      </dialog>
 
       <dialog id="movemodal" className="modal">
         <div className="modal-box brandbg text-center border-2 rounded-4xl p-8 border-black relative overflow-visible">
@@ -338,7 +489,6 @@ function Notch({ taskbarHeight = 0 }) {
         </div>
       </dialog>
 
-      {/* Speaking indicator modal */}
       <div
         className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-300 ease-in-out ${
           isCtrlWinHeld ? "opacity-100" : "opacity-0"

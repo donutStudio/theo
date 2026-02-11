@@ -1,8 +1,6 @@
-"""
-Screenshot capture with label-free grid overlay and downscaling.
-See IMAGEPLAN.md for API and design details.
-Returns a PIL Image + metadata for in-process LLM usage (no base64).
-"""
+#Screenshot capture with label-free grid overlay and downscaling.
+#Returns a PIL Image and metadata for in-process LLM usage.
+
 import sys
 from ctypes import POINTER, Structure, WINFUNCTYPE, byref, c_long, c_uint, c_void_p, windll
 from ctypes.wintypes import RECT
@@ -10,15 +8,15 @@ from ctypes.wintypes import RECT
 import mss
 from PIL import Image, ImageDraw
 
+# these are configs for the graph that is overlayed on every screenshot.
 
-# Grid and scale constants (from IMAGEPLAN.md)
 MINOR_SPACING = 10
 MAJOR_SPACING = 100
 SCALE_FACTOR = 0.75
 
-# Grid line styling
-MINOR_COLOR = (200, 200, 200)   # light gray
-MAJOR_COLOR = (120, 120, 120)   # darker gray
+
+MINOR_COLOR = (200, 200, 200) 
+MAJOR_COLOR = (120, 120, 120) 
 MINOR_WIDTH = 1
 MAJOR_WIDTH = 2
 
@@ -72,13 +70,13 @@ def _select_primary_monitor(sct):
 
 def _draw_grid(draw: ImageDraw.ImageDraw, width: int, height: int) -> None:
     """Draw label-free grid: minor every 10px, major every 100px."""
-    # Minor lines every MINOR_SPACING px
+    # minor lines
     for x in range(0, width + 1, MINOR_SPACING):
         draw.line([(x, 0), (x, height)], fill=MINOR_COLOR, width=MINOR_WIDTH)
     for y in range(0, height + 1, MINOR_SPACING):
         draw.line([(0, y), (width, y)], fill=MINOR_COLOR, width=MINOR_WIDTH)
 
-    # Major lines every MAJOR_SPACING px (overdraw for emphasis)
+    # major lines
     for x in range(0, width + 1, MAJOR_SPACING):
         draw.line([(x, 0), (x, height)], fill=MAJOR_COLOR, width=MAJOR_WIDTH)
     for y in range(0, height + 1, MAJOR_SPACING):
@@ -86,34 +84,23 @@ def _draw_grid(draw: ImageDraw.ImageDraw, width: int, height: int) -> None:
 
 
 def image_processor():
-    """
-    Capture primary display, overlay coordinate grid, downscale, and return
-    PIL Image + metadata for in-process LLM usage (no base64).
-
-    Returns:
-        dict with keys: image (PIL.Image.Image), width, height, grid, scale
-    Raises:
-        RuntimeError: if capture fails
-    """
     with mss.mss() as sct:
-        # Windows: use Win32 primary monitor; others: monitors[1]
         primary = _select_primary_monitor(sct)
         screenshot = sct.grab(primary)
 
         if screenshot is None:
             raise RuntimeError("Failed to capture screenshot")
 
-        # mss returns BGRA bytes
         width = screenshot.width
         height = screenshot.height
         img = Image.frombytes("RGBA", (width, height), screenshot.bgra)
         img = img.convert("RGB")
 
-        # Overlay grid
+        # overlay grid
         draw = ImageDraw.Draw(img)
         _draw_grid(draw, width, height)
 
-        # Downscale to reduce vision token usage; keep as PIL for LLM handoff
+        # compression
         new_width = int(width * SCALE_FACTOR)
         new_height = int(height * SCALE_FACTOR)
         img = img.resize((new_width, new_height), Image.Resampling.LANCZOS)

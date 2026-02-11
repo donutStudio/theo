@@ -5,7 +5,9 @@
  * - Focus management to prevent minimization
  */
 
-// Load environment variables FIRST (before any other imports that might use them)
+// This is whats behind Theo's seamless experience.
+
+// Load environment variables
 import dotenv from "dotenv";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -13,7 +15,7 @@ import { dirname, join } from "node:path";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-// Load .env from project root (theo/.env, outside frontend and backend)
+// Load .env for apis
 dotenv.config({ path: join(__dirname, "../../../.env") });
 
 import { app, BrowserWindow, Menu, screen, ipcMain, shell } from "electron";
@@ -24,7 +26,12 @@ import { GlobalKeyboardListener } from "node-global-key-listener";
 
 const require = createRequire(import.meta.url);
 
-// Handle creating/removing shortcuts on Windows when installing/uninstalling.
+let mainWindowRef = null;
+let inputLockCount = 0;
+let clickThroughEnabled = false;
+
+const isInputLocked = () => inputLockCount > 0;
+
 if (started) {
   app.quit();
 }
@@ -46,8 +53,23 @@ ipcMain.handle("get-screen-size", () => {
   return { width, height };
 });
 
-// Global reference to main window
-let mainWindowRef = null;
+// Renderer-controlled input lock for startup/fallback audio and ai workflow.
+ipcMain.handle("set-input-lock", (_event, payload) => {
+  const lock = Boolean(payload?.lock);
+  inputLockCount = lock ? inputLockCount + 1 : Math.max(0, inputLockCount - 1);
+  if (mainWindowRef?.webContents) {
+    mainWindowRef.webContents.send("input-lock-changed", {
+      locked: isInputLocked(),
+      lockCount: inputLockCount,
+    });
+  }
+  return { locked: isInputLocked(), lockCount: inputLockCount };
+});
+
+ipcMain.handle("get-input-lock-state", () => ({
+  locked: isInputLocked(),
+  lockCount: inputLockCount,
+}));
 
 // Initialize Groq client in main process (uses dotenv loaded earlier)
 let groqClient = null;
@@ -69,7 +91,9 @@ try {
 // Transcribe audio from renderer (Ctrl+Win recording) and print to terminal
 ipcMain.handle("transcribe-audio", async (_event, arrayBuffer) => {
   if (!groqClient) {
-    console.error("[STT] Groq client not initialized. Set GROQ_API_KEY in .env");
+    console.error(
+      "[STT] Groq client not initialized. Set GROQ_API_KEY in .env",
+    );
     return null;
   }
   if (!arrayBuffer || !(arrayBuffer instanceof ArrayBuffer)) {
@@ -120,8 +144,11 @@ let gkl = null;
 
 const handleCtrlWinPress = () => {
   const now = Date.now();
+  if (clickThroughEnabled) return;
+  if (isInputLocked()) return;
   if (now - lastTriggerAt < TRIGGER_LOCKOUT_MS) return;
-  if (lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS) return;
+  if (lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS)
+    return;
   if (!bothKeysReleased) return;
 
   ctrlWinPressed = true;
@@ -137,6 +164,8 @@ const handleCtrlWinPress = () => {
 };
 
 const handleCtrlWinRelease = () => {
+  if (clickThroughEnabled) return;
+  if (isInputLocked()) return;
   if (!ctrlWinPressed) return;
 
   ctrlWinPressed = false;
@@ -194,7 +223,11 @@ const initializeGlobalKeyListener = async () => {
     const ctrlHeld = CTRL_NAMES.some((k) => down[k]);
     const winHeld = WIN_NAMES.some((k) => down[k]);
 
-    if (e.state === "UP" && ctrlWinPressed && (isCtrlKey(e.name) || isWinKey(e.name))) {
+    if (
+      e.state === "UP" &&
+      ctrlWinPressed &&
+      (isCtrlKey(e.name) || isWinKey(e.name))
+    ) {
       handleCtrlWinRelease();
     }
 
@@ -264,6 +297,58 @@ const createWindow = () => {
 
   // IPC: quit
   ipcMain.on("quit-app", () => app.quit());
+
+  // Click-through: overlay ignores mouse except over notch (notch stays clickable)
+  let notchBounds = null; // { x, y, width, height } in window coordinates
+  let clickThroughInterval = null;
+  const NOTCH_POLL_MS = 80;
+
+  ipcMain.handle("set-click-through", (_event, { enabled }) => {
+    clickThroughEnabled = Boolean(enabled);
+    if (clickThroughInterval) {
+      clearInterval(clickThroughInterval);
+      clickThroughInterval = null;
+    }
+    if (!clickThroughEnabled) {
+      mainWindow.setIgnoreMouseEvents(false);
+      return { ok: true, enabled: false };
+    }
+    const check = () => {
+      if (!mainWindowRef || mainWindowRef.isDestroyed()) return;
+      const cursor = screen.getCursorScreenPoint();
+      const winBounds = mainWindow.getBounds();
+      const wx = cursor.x - winBounds.x;
+      const wy = cursor.y - winBounds.y;
+      const inside =
+        notchBounds &&
+        wx >= notchBounds.x &&
+        wx <= notchBounds.x + notchBounds.width &&
+        wy >= notchBounds.y &&
+        wy <= notchBounds.y + notchBounds.height;
+      mainWindow.setIgnoreMouseEvents(!inside, { forward: true });
+    };
+    check();
+    clickThroughInterval = setInterval(check, NOTCH_POLL_MS);
+    return { ok: true, enabled: true };
+  });
+
+  ipcMain.handle("set-notch-bounds", (_event, bounds) => {
+    if (
+      bounds &&
+      typeof bounds.x === "number" &&
+      typeof bounds.y === "number"
+    ) {
+      notchBounds = {
+        x: bounds.x,
+        y: bounds.y,
+        width: Math.max(0, Number(bounds.width) || 0),
+        height: Math.max(0, Number(bounds.height) || 0),
+      };
+    } else {
+      notchBounds = null;
+    }
+    return { ok: true };
+  });
 
   mainWindow.on("closed", () => {
     mainWindowRef = null;

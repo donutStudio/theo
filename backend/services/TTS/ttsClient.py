@@ -1,8 +1,5 @@
-"""
-Thin TTS client that generates speech from text and plays it back.
-Uses sounddevice + soundfile for playback (same as audioFeedback) so TTS WAV
-formats from Groq are supported; winsound often fails with these.
-"""
+#This is a thin TTS client that generates speech from text and plays it back.
+
 import logging
 from pathlib import Path
 from typing import Optional
@@ -42,10 +39,7 @@ def _play_wav(path: Path, async_play: bool = False) -> None:
 
 
 def speak_text(text: str, out_path: Optional[Path] = None, async_play: bool = False) -> Path:
-    """
-    Generate TTS for text and play it back.
-    Returns the path to the generated WAV file.
-    """
+    #Generate TTS for text and play it back.
     audio_path = synthesize_tts(text, out_path=out_path)
     _play_wav(audio_path, async_play=async_play)
     return audio_path

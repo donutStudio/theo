@@ -1,3 +1,5 @@
+#  user text reponse to generated verbal response file
+
 import os
 from pathlib import Path
 from typing import Optional
@@ -5,7 +7,7 @@ from typing import Optional
 from dotenv import load_dotenv
 from groq import Groq
 
-# Load .env from project root (theo/.env)
+# Load .env for groq key (create a .env file in the project root and paste your groq api key there)
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 _client: Optional[Groq] = None

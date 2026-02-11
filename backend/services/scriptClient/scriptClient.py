@@ -1,7 +1,4 @@
-"""
-Execute LLM-generated PyAutoGUI scripts in-process with moderate safety checks.
-See SCRIPTFILEPLAN.md for design and safety rules.
-"""
+
 import ast
 import builtins
 import logging
@@ -22,12 +19,11 @@ logger = logging.getLogger(__name__)
 # Allowlisted imports (script may only use these)
 ALLOWED_IMPORTS = frozenset({"pyautogui", "time", "random", "math", "PIL"})
 
-# Blocked builtins (not provided in exec globals)
+# Blocked builtins 
 BLOCKED_BUILTINS = frozenset({"open", "eval", "exec"})
 
 
 def _safe_import(name: str, globals=None, locals=None, fromlist=(), level=0):
-    """Restricted __import__ that only allows allowlisted modules."""
     mod = name.split(".", 1)[0]
     if not _allowed_module(name) and not _allowed_module(mod):
         raise ImportError(f"Import not allowed: {name!r}")
@@ -35,14 +31,12 @@ def _safe_import(name: str, globals=None, locals=None, fromlist=(), level=0):
 
 
 def _safe_builtins() -> dict[str, Any]:
-    """Builtins dict with dangerous names removed; allow restricted __import__."""
     safe = {k: v for k, v in builtins.__dict__.items() if k not in BLOCKED_BUILTINS}
     safe["__import__"] = _safe_import
     return safe
 
 
 def _allowed_module(name: str) -> bool:
-    """True if module name is on the allowlist (including PIL submodules)."""
     if name in ALLOWED_IMPORTS:
         return True
     if name.startswith("PIL."):
@@ -51,10 +45,6 @@ def _allowed_module(name: str) -> bool:
 
 
 def _validate_script(script_text: str) -> None:
-    """
-    Validate script via AST: only allowlisted imports, no blocked builtins.
-    Raises ValueError with a short message if invalid.
-    """
     try:
         tree = ast.parse(script_text)
     except SyntaxError as e:
