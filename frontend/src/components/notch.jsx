@@ -223,7 +223,11 @@ function Notch({ taskbarHeight = 0 }) {
 
   useEffect(() => {
     const handleKeyDown = async (e) => {
-      if (clickThroughEnabled) return;
+      if (
+        clickThroughEnabled &&
+        !getCachedSettings()?.general?.allowShortcutWithHumanInput
+      )
+        return;
       if (await isInputLocked()) {
         isHoldingRef.current = false;
         setIsCtrlWinHeld(false);
@@ -250,7 +254,11 @@ function Notch({ taskbarHeight = 0 }) {
     };
 
     const handleKeyUp = async (e) => {
-      if (clickThroughEnabled) return;
+      if (
+        clickThroughEnabled &&
+        !getCachedSettings()?.general?.allowShortcutWithHumanInput
+      )
+        return;
       if (await isInputLocked()) {
         isHoldingRef.current = false;
         setIsCtrlWinHeld(false);

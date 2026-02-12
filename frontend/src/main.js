@@ -30,6 +30,68 @@ const require = createRequire(import.meta.url);
 let mainWindowRef = null;
 let inputLockCount = 0;
 let clickThroughEnabled = false;
+let activeSettings = null;
+
+const DEFAULT_SETTINGS = {
+  audio: {
+    microphoneDeviceId: "system-default",
+    speakerDeviceId: "system-default",
+  },
+  display: {
+    targetDisplayId: "system-primary",
+  },
+  general: {
+    launchOnStartup: false,
+    clickThroughByDefault: false,
+    conciseResponses: false,
+    allowShortcutWithHumanInput: false,
+  },
+};
+
+const settingsPath = () => path.join(app.getPath("userData"), "settings.json");
+
+const mergeSettings = (partial = {}) => ({
+  ...DEFAULT_SETTINGS,
+  ...partial,
+  audio: { ...DEFAULT_SETTINGS.audio, ...(partial.audio || {}) },
+  display: { ...DEFAULT_SETTINGS.display, ...(partial.display || {}) },
+  general: { ...DEFAULT_SETTINGS.general, ...(partial.general || {}) },
+});
+
+const readSettings = async () => {
+  try {
+    const raw = await fs.readFile(settingsPath(), "utf8");
+    return mergeSettings(JSON.parse(raw));
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error("[Settings] Failed to read settings:", err);
+    }
+    return mergeSettings();
+  }
+};
+
+const writeSettings = async (settings) => {
+  const normalized = mergeSettings(settings);
+  await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+  await fs.writeFile(settingsPath(), JSON.stringify(normalized, null, 2), "utf8");
+  return normalized;
+};
+
+const updateSettingsByPath = (settings, settingPath, value) => {
+  const pathParts = String(settingPath || "").split(".").filter(Boolean);
+  if (pathParts.length === 0) return settings;
+  const draft = structuredClone(settings);
+  let cursor = draft;
+  for (let i = 0; i < pathParts.length - 1; i += 1) {
+    const key = pathParts[i];
+    if (!cursor[key] || typeof cursor[key] !== "object") {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  }
+  cursor[pathParts[pathParts.length - 1]] = value;
+  return mergeSettings(draft);
+};
 
 const DEFAULT_SETTINGS = {
   audio: {
@@ -92,6 +154,9 @@ const updateSettingsByPath = (settings, settingPath, value) => {
 
 const isInputLocked = () => inputLockCount > 0;
 
+const shouldAllowShortcutWithHumanInput = () =>
+  Boolean(activeSettings?.general?.allowShortcutWithHumanInput);
+
 if (started) {
   app.quit();
 }
@@ -115,12 +180,14 @@ ipcMain.handle("get-screen-size", () => {
 
 ipcMain.handle("settings:get", async () => {
   const settings = await readSettings();
+  activeSettings = settings;
   return settings;
 });
 
 ipcMain.handle("settings:update", async (_event, payload) => {
   const current = await readSettings();
   const updated = updateSettingsByPath(current, payload?.path, payload?.value);
+  activeSettings = updated;
 
   if (payload?.path === "general.launchOnStartup") {
     try {
@@ -237,7 +304,7 @@ let gkl = null;
 
 const handleCtrlWinPress = () => {
   const now = Date.now();
-  if (clickThroughEnabled) return;
+  if (clickThroughEnabled && !shouldAllowShortcutWithHumanInput()) return;
   if (isInputLocked()) return;
   if (now - lastTriggerAt < TRIGGER_LOCKOUT_MS) return;
   if (lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS)
@@ -257,7 +324,7 @@ const handleCtrlWinPress = () => {
 };
 
 const handleCtrlWinRelease = () => {
-  if (clickThroughEnabled) return;
+  if (clickThroughEnabled && !shouldAllowShortcutWithHumanInput()) return;
   if (isInputLocked()) return;
   if (!ctrlWinPressed) return;
 
@@ -473,7 +540,8 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  activeSettings = await readSettings();
   createWindow();
 
   // start key listener in background so a slow/hanging spawn doesn't block the window

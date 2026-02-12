@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   general: {
     launchOnStartup: false,
     clickThroughByDefault: false,
+    conciseResponses: false,
+    allowShortcutWithHumanInput: false,
   },
 };
 

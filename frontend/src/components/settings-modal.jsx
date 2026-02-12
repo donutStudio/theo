@@ -214,6 +214,28 @@ export default function SettingsModal() {
             </SettingCard>
           </Category>
 
+
+
+          <Category
+            title="Theo Assistant"
+            subtitle="Tune how detailed Theo should be during responses."
+          >
+            <SettingCard
+              title="Quick mode (shorter responses)"
+              description="Makes Theo less verbose and focused on fast, concise answers."
+            >
+              <label className="label cursor-pointer justify-start gap-3">
+                <input
+                  type="checkbox"
+                  className="toggle"
+                  checked={settings.general.conciseResponses}
+                  onChange={onToggleChange("general.conciseResponses")}
+                />
+                <span className="inter">Use shorter, faster responses</span>
+              </label>
+            </SettingCard>
+          </Category>
+
           <Category
             title="General"
             subtitle="Quality-of-life and startup behavior settings."
@@ -245,6 +267,21 @@ export default function SettingsModal() {
                   onChange={onToggleChange("general.clickThroughByDefault")}
                 />
                 <span className="inter">Start in click-through mode</span>
+              </label>
+            </SettingCard>
+
+            <SettingCard
+              title="Allow Ctrl + Win while human input is enabled"
+              description="Keep Theo voice shortcut active even when human input mode is turned on."
+            >
+              <label className="label cursor-pointer justify-start gap-3">
+                <input
+                  type="checkbox"
+                  className="toggle"
+                  checked={settings.general.allowShortcutWithHumanInput}
+                  onChange={onToggleChange("general.allowShortcutWithHumanInput")}
+                />
+                <span className="inter">Keep Ctrl + Win shortcut active</span>
               </label>
             </SettingCard>
           </Category>
