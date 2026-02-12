@@ -1,10 +1,11 @@
+import React, { useEffect, useState } from "react";
 import { createRoot } from "react-dom/client";
-import { useEffect, useState } from "react";
 import "./index.css";
 import "./ai-overlay.css";
 import Notch from "./components/notch";
 import startupSound from "./assets/verbalpreset/startup2.wav";
 import { initPushToTalk } from "./utils/sttUtil";
+import { getCachedSettings, loadSettings } from "./utils/settings";
 
 async function setInputLock(lock) {
   if (!window.electron?.ipcRenderer?.invoke) return;
@@ -32,13 +33,14 @@ const App = () => {
 
   // Initialize app - retry if electron isn't ready yet (preload can lag)
   useEffect(() => {
-    function setupPushToTalk() {
+    async function setupPushToTalk() {
       if (!window.electron?.ipcRenderer) {
         console.warn("[STT] ipcRenderer not ready, retrying in 500ms...");
         setTimeout(setupPushToTalk, 500);
         return;
       }
       try {
+        await loadSettings();
         initPushToTalk();
         console.log("[STT] Push-to-talk initialized - hold Ctrl+Win to record");
       } catch (err) {
@@ -79,6 +81,18 @@ const App = () => {
     const playStartup = async () => {
       const audio = new Audio(startupSound);
       audio.currentTime = 0;
+      const speakerDeviceId = getCachedSettings()?.audio?.speakerDeviceId;
+      if (
+        speakerDeviceId &&
+        speakerDeviceId !== "system-default" &&
+        typeof audio.setSinkId === "function"
+      ) {
+        try {
+          await audio.setSinkId(speakerDeviceId);
+        } catch (err) {
+          console.warn("[Settings] Failed to route startup audio to selected speaker:", err);
+        }
+      }
       await setInputLock(true);
       try {
         await audio.play();
