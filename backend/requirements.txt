@@ -7,3 +7,4 @@ mss
 Pillow
 sounddevice
 soundfile
+openai

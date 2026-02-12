@@ -10,7 +10,7 @@ load_dotenv(Path(__file__).resolve().parent.parent.parent.parent / ".env")
 system_prompt_path = Path(__file__).parent / "CLASSIFERSYSTEMPROMPT.md"
 SYSTEM_PROMPT = system_prompt_path.read_text()
 
-#this is the functoin that contains the groq client
+# this is the functoin that contains the groq client
 def llmclassifier(user_input: str) -> str:
 
   client = Groq(api_key=os.getenv("GROQ_API_KEY"))
