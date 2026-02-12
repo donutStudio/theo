@@ -1,5 +1,3 @@
-import { getCachedSettings } from "./settings.js";
-
 const AI_URL = "http://127.0.0.1:5000/ai";
 const CLASSIFY_URL = "http://127.0.0.1:5000/ai/classify";
 
@@ -40,8 +38,7 @@ export async function aiGO(text) {
       await setClickThrough(true);
     }
 
-    const conciseMode = Boolean(getCachedSettings()?.general?.conciseResponses);
-    const url = `${AI_URL}?user_input=${encodeURIComponent(text)}&classification=${encodeURIComponent(classification)}&response_mode=${conciseMode ? "concise" : "default"}`;
+    const url = `${AI_URL}?user_input=${encodeURIComponent(text)}&classification=${encodeURIComponent(classification)}`;
     const response = await fetch(url);
     if (!response.ok) {
       const body = await response.text();

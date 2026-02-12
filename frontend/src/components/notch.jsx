@@ -1,13 +1,7 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import mascot from "../assets/mascot.png";
 import ping1 from "../assets/ping1.mp3";
 import ping2 from "../assets/ping2.mp3";
-import SettingsModal from "./settings-modal";
-import {
-  getCachedSettings,
-  loadSettings,
-  subscribeToSettingsChange,
-} from "../utils/settings";
 
 function Notch({ taskbarHeight = 0 }) {
   const bottomOffset = taskbarHeight + 10;
@@ -56,65 +50,12 @@ function Notch({ taskbarHeight = 0 }) {
 
   // audio objects
   useEffect(() => {
-    const initializeAudio = async () => {
-      ping1Audio.current = new Audio(ping1);
-      ping2Audio.current = new Audio(ping2);
+    ping1Audio.current = new Audio(ping1);
+    ping2Audio.current = new Audio(ping2);
 
-      const speakerDeviceId = getCachedSettings()?.audio?.speakerDeviceId;
-      if (
-        speakerDeviceId &&
-        speakerDeviceId !== "system-default" &&
-        typeof ping1Audio.current?.setSinkId === "function"
-      ) {
-        try {
-          await Promise.all([
-            ping1Audio.current.setSinkId(speakerDeviceId),
-            ping2Audio.current.setSinkId(speakerDeviceId),
-          ]);
-        } catch (err) {
-          console.warn("[Settings] Failed to route ping sounds to selected speaker:", err);
-        }
-      }
-
-      // Preload audio
-      ping1Audio.current.load();
-      ping2Audio.current.load();
-    };
-
-    loadSettings().finally(() => {
-      initializeAudio().catch((err) => {
-        console.error("[Settings] Failed to initialize audio cues:", err);
-      });
-    });
-  }, []);
-
-
-
-  useEffect(() => {
-    const applySpeaker = async (nextSettings) => {
-      const speakerDeviceId = nextSettings?.audio?.speakerDeviceId;
-      if (
-        !speakerDeviceId ||
-        speakerDeviceId === "system-default" ||
-        typeof ping1Audio.current?.setSinkId !== "function"
-      ) {
-        return;
-      }
-      try {
-        await Promise.all([
-          ping1Audio.current?.setSinkId(speakerDeviceId),
-          ping2Audio.current?.setSinkId(speakerDeviceId),
-        ]);
-      } catch (err) {
-        console.warn("[Settings] Failed to update ping output device:", err);
-      }
-    };
-
-    const unsubscribe = subscribeToSettingsChange((nextSettings) => {
-      applySpeaker(nextSettings);
-    });
-
-    return unsubscribe;
+    // Preload audio
+    ping1Audio.current.load();
+    ping2Audio.current.load();
   }, []);
 
   // Listen for Ctrl+Win key events
@@ -223,11 +164,7 @@ function Notch({ taskbarHeight = 0 }) {
 
   useEffect(() => {
     const handleKeyDown = async (e) => {
-      if (
-        clickThroughEnabled &&
-        !getCachedSettings()?.general?.allowShortcutWithHumanInput
-      )
-        return;
+      if (clickThroughEnabled) return;
       if (await isInputLocked()) {
         isHoldingRef.current = false;
         setIsCtrlWinHeld(false);
@@ -254,11 +191,7 @@ function Notch({ taskbarHeight = 0 }) {
     };
 
     const handleKeyUp = async (e) => {
-      if (
-        clickThroughEnabled &&
-        !getCachedSettings()?.general?.allowShortcutWithHumanInput
-      )
-        return;
+      if (clickThroughEnabled) return;
       if (await isInputLocked()) {
         isHoldingRef.current = false;
         setIsCtrlWinHeld(false);
@@ -286,15 +219,6 @@ function Notch({ taskbarHeight = 0 }) {
       window.removeEventListener("keyup", handleKeyUp);
     };
   }, [clickThroughEnabled]);
-
-  useEffect(() => {
-    loadSettings().then((settings) => {
-      if (settings?.general?.clickThroughByDefault) {
-        window.electron?.setClickThrough?.(true);
-        setClickThroughEnabled(true);
-      }
-    });
-  }, []);
 
   return (
     <div
@@ -328,10 +252,7 @@ function Notch({ taskbarHeight = 0 }) {
               className={`tooltip border ${tooltipDirClass}`}
               data-tip="Settings"
             >
-              <button
-                onClick={() => document.getElementById("settingsmodal").showModal()}
-                className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
-              >
+              <button className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0">
                 <i className="bi bi-gear-fill"></i>
               </button>
             </div>
@@ -567,8 +488,6 @@ function Notch({ taskbarHeight = 0 }) {
           </div>
         </div>
       </dialog>
-
-      <SettingsModal />
 
       <div
         className={`fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none transition-opacity duration-300 ease-in-out ${
