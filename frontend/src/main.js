@@ -20,6 +20,7 @@ dotenv.config({ path: join(__dirname, "../../../.env") });
 
 import { app, BrowserWindow, Menu, screen, ipcMain, shell } from "electron";
 import path from "node:path";
+import { promises as fs } from "node:fs";
 import { createRequire } from "node:module";
 import started from "electron-squirrel-startup";
 import { GlobalKeyboardListener } from "node-global-key-listener";
@@ -29,8 +30,73 @@ const require = createRequire(import.meta.url);
 let mainWindowRef = null;
 let inputLockCount = 0;
 let clickThroughEnabled = false;
+let activeSettings = null;
+
+const DEFAULT_SETTINGS = {
+  audio: {
+    microphoneDeviceId: "system-default",
+    speakerDeviceId: "system-default",
+  },
+  display: {
+    targetDisplayId: "system-primary",
+  },
+  general: {
+    launchOnStartup: false,
+    clickThroughByDefault: false,
+    conciseResponses: false,
+    allowShortcutWithHumanInput: false,
+  },
+};
+
+const settingsPath = () => path.join(app.getPath("userData"), "settings.json");
+
+const mergeSettings = (partial = {}) => ({
+  ...DEFAULT_SETTINGS,
+  ...partial,
+  audio: { ...DEFAULT_SETTINGS.audio, ...(partial.audio || {}) },
+  display: { ...DEFAULT_SETTINGS.display, ...(partial.display || {}) },
+  general: { ...DEFAULT_SETTINGS.general, ...(partial.general || {}) },
+});
+
+const readSettings = async () => {
+  try {
+    const raw = await fs.readFile(settingsPath(), "utf8");
+    return mergeSettings(JSON.parse(raw));
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error("[Settings] Failed to read settings:", err);
+    }
+    return mergeSettings();
+  }
+};
+
+const writeSettings = async (settings) => {
+  const normalized = mergeSettings(settings);
+  await fs.mkdir(path.dirname(settingsPath()), { recursive: true });
+  await fs.writeFile(settingsPath(), JSON.stringify(normalized, null, 2), "utf8");
+  return normalized;
+};
+
+const updateSettingsByPath = (settings, settingPath, value) => {
+  const pathParts = String(settingPath || "").split(".").filter(Boolean);
+  if (pathParts.length === 0) return settings;
+  const draft = structuredClone(settings);
+  let cursor = draft;
+  for (let i = 0; i < pathParts.length - 1; i += 1) {
+    const key = pathParts[i];
+    if (!cursor[key] || typeof cursor[key] !== "object") {
+      cursor[key] = {};
+    }
+    cursor = cursor[key];
+  }
+  cursor[pathParts[pathParts.length - 1]] = value;
+  return mergeSettings(draft);
+};
 
 const isInputLocked = () => inputLockCount > 0;
+
+const shouldAllowShortcutWithHumanInput = () =>
+  Boolean(activeSettings?.general?.allowShortcutWithHumanInput);
 
 if (started) {
   app.quit();
@@ -51,6 +117,41 @@ ipcMain.handle("open-external", (_event, url) => {
 ipcMain.handle("get-screen-size", () => {
   const { width, height } = screen.getPrimaryDisplay().size;
   return { width, height };
+});
+
+ipcMain.handle("settings:get", async () => {
+  const settings = await readSettings();
+  activeSettings = settings;
+  return settings;
+});
+
+ipcMain.handle("settings:update", async (_event, payload) => {
+  const current = await readSettings();
+  const updated = updateSettingsByPath(current, payload?.path, payload?.value);
+  activeSettings = updated;
+
+  if (payload?.path === "general.launchOnStartup") {
+    try {
+      app.setLoginItemSettings({
+        openAtLogin: Boolean(payload?.value),
+      });
+    } catch (err) {
+      console.error("[Settings] Failed to update launch-on-startup:", err);
+    }
+  }
+
+  return writeSettings(updated);
+});
+
+ipcMain.handle("settings:list-displays", () => {
+  const primaryId = screen.getPrimaryDisplay().id;
+  const displays = screen.getAllDisplays().map((display) => ({
+    id: String(display.id),
+    label: display.label || `Display ${display.id}`,
+    isPrimary: display.id === primaryId,
+    resolution: `${display.size.width}x${display.size.height}`,
+  }));
+  return displays;
 });
 
 // Renderer-controlled input lock for startup/fallback audio and ai workflow.
@@ -144,7 +245,7 @@ let gkl = null;
 
 const handleCtrlWinPress = () => {
   const now = Date.now();
-  if (clickThroughEnabled) return;
+  if (clickThroughEnabled && !shouldAllowShortcutWithHumanInput()) return;
   if (isInputLocked()) return;
   if (now - lastTriggerAt < TRIGGER_LOCKOUT_MS) return;
   if (lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS)
@@ -164,7 +265,7 @@ const handleCtrlWinPress = () => {
 };
 
 const handleCtrlWinRelease = () => {
-  if (clickThroughEnabled) return;
+  if (clickThroughEnabled && !shouldAllowShortcutWithHumanInput()) return;
   if (isInputLocked()) return;
   if (!ctrlWinPressed) return;
 
@@ -380,7 +481,8 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  activeSettings = await readSettings();
   createWindow();
 
   // start key listener in background so a slow/hanging spawn doesn't block the window
