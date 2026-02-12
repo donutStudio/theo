@@ -1,6 +1,7 @@
 import io
 import logging
 import threading
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -32,6 +33,31 @@ CORS(app)
 # single-session memory: last 6 turns. resets every run.
 SESSION_MEMORY: list[dict] = []
 MAX_MEMORY_TURNS = 12  # 6 turns = 6 user + 6 assistant messages combined together
+
+
+def _is_datetime_query(user_input: str) -> bool:
+    text = (user_input or "").strip().lower()
+    patterns = (
+        "what time",
+        "current time",
+        "time is it",
+        "what date",
+        "current date",
+        "what day",
+        "day is it",
+        "day of the week",
+        "today's date",
+        "todays date",
+    )
+    return any(p in text for p in patterns)
+
+
+def _build_datetime_response() -> str:
+    now = datetime.now()
+    return (
+        f"Today is {now.strftime('%A')}, {now.strftime('%B %d, %Y')}. "
+        f"The current time is {now.strftime('%I:%M %p').lstrip('0')}."
+    )
 
 
 def _normalize_classification(raw: str) -> str:
@@ -206,6 +232,18 @@ def ai():
         return jsonify({"ok": False, "error": "user_input is required and must be non-empty"}), 400
 
     user_input = str(user_input).strip()
+
+    # Fast path for day/date/time requests (no classifier/main model round-trip).
+    if _is_datetime_query(user_input):
+        theo_response = _build_datetime_response()
+        speak_text(theo_response, async_play=False)
+        return jsonify({
+            "ok": True,
+            "classification": "---CHAT---",
+            "script_ok": None,
+            "theo_response": theo_response,
+        }), 200
+
     classification_param = request.args.get("classification")
     if classification_param and classification_param.strip() in ("---CHAT---", "---AGENT---", "---UNSAFE---"):
         classification = classification_param.strip()
