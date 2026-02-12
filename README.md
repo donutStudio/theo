@@ -21,6 +21,7 @@ confirms actions via text-to-speech.
 - pip
 - Node.js and npm (for the Electron frontend)
   \*Assume latest versions for all dependencies
+- Your own OpenAI and Groq api keys
 
 ## Environment Variables
 
