@@ -58,5 +58,5 @@ npm start
 
 ## License
 
-© 2025 Theo. All rights reserved.  
+© 2025 Theo.ai All rights reserved.  
 This project is licensed under the MIT License. See the LICENSE file for details.
