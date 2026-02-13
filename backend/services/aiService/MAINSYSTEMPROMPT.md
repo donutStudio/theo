@@ -41,6 +41,7 @@ You must generate **two outputs**:
      - **Type text:** focus input area → type characters → optionally press Enter.
      - **Click button:** locate position on screenshot grid → click.
      - **Read information:** locate relevant UI element via grid → perform read actions.
+     - **Change windows** locate the desired window in the windows taskbar and switch to it by clicking on it.
 
    - AI should choose steps dynamically based on the command; do not follow example rigidly.
 
