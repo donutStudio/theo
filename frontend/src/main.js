@@ -165,10 +165,9 @@ const handleCtrlWinPress = () => {
   ctrlWinPressed = true;
   bothKeysReleased = false;
   lastTriggerAt = now;
-  if (outputPlaying) {
-    outputPlaying = false;
-    fetch("http://127.0.0.1:5000/stop-tts", { method: "POST" }).catch(() => {});
-  }
+  // Always stop TTS when Ctrl+Win pressed - no matter what
+  fetch("http://127.0.0.1:5000/stop-tts", { method: "POST" }).catch(() => {});
+  if (outputPlaying) outputPlaying = false;
   console.log("[STT] Ctrl+Win pressed - sending ctrl-win-key-down to renderer");
 
   if (mainWindowRef?.webContents) {
@@ -237,6 +236,12 @@ const initializeGlobalKeyListener = async () => {
   await gkl.addListener((e, down) => {
     const ctrlHeld = CTRL_NAMES.some((k) => down[k]);
     const winHeld = WIN_NAMES.some((k) => down[k]);
+
+    // Ctrl alone (no Win): stop TTS response
+    if (e.state === "DOWN" && isCtrlKey(e.name) && ctrlHeld && !winHeld) {
+      fetch("http://127.0.0.1:5000/stop-tts", { method: "POST" }).catch(() => {});
+      if (outputPlaying) outputPlaying = false;
+    }
 
     if (
       e.state === "UP" &&
