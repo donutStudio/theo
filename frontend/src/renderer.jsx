@@ -4,8 +4,14 @@ import "./index.css";
 import "./ai-overlay.css";
 import Notch from "./components/notch";
 import startupSound from "./assets/verbalpreset/startup2.wav";
+import ping1 from "./assets/ping1.mp3";
 import loadingSound from "./assets/loading.mp3";
 import { initPushToTalk } from "./utils/sttUtil";
+import {
+  getSavedSpeakerDeviceId,
+  getSavedStartupSoundFull,
+  applySpeakerToElement,
+} from "./utils/settingsUtil";
 
 async function setInputLock(lock) {
   if (!window.electron?.ipcRenderer?.invoke) return;
@@ -94,6 +100,8 @@ const App = () => {
       try {
         if (!loadingActiveRef.current) return;
         const audio = new Audio(loadingSound);
+        const deviceId = getSavedSpeakerDeviceId();
+        if (deviceId) applySpeakerToElement(audio, deviceId).catch(() => {});
         audio.play().catch((err) => console.error("[Loading] Play error:", err));
         const onEnded = () => {
           audio.removeEventListener("ended", onEnded);
@@ -139,7 +147,10 @@ const App = () => {
 
   useEffect(() => {
     const playStartup = async () => {
-      const audio = new Audio(startupSound);
+      const soundSrc = getSavedStartupSoundFull() ? startupSound : ping1;
+      const audio = new Audio(soundSrc);
+      const deviceId = getSavedSpeakerDeviceId();
+      if (deviceId) await applySpeakerToElement(audio, deviceId);
       audio.currentTime = 0;
       await setInputLock(true);
       try {

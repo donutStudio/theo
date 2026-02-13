@@ -1,5 +1,6 @@
 import { sttFallback } from "./sttFallback.js";
 import { aiGO } from "./workflow.js";
+import { getSavedMicDeviceId } from "./settingsUtil.js";
 
 let mediaRecorder = null;
 let audioChunks = [];
@@ -46,14 +47,33 @@ export function initPushToTalk() {
         stream.getTracks().forEach((track) => track.stop());
       }
 
-      // Request microphone access
-      stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 16000,
-        },
-      });
+      // Request microphone access (use saved device if available)
+      const deviceId = getSavedMicDeviceId();
+      const baseConstraints = {
+        echoCancellation: true,
+        noiseSuppression: true,
+        sampleRate: 16000,
+      };
+      try {
+        if (deviceId) {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: { ...baseConstraints, deviceId: { exact: deviceId } },
+          });
+        } else {
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: baseConstraints,
+          });
+        }
+      } catch (err) {
+        if (deviceId) {
+          log("Saved mic not available, falling back to default:", err?.message);
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: baseConstraints,
+          });
+        } else {
+          throw err;
+        }
+      }
 
       mediaRecorder = new MediaRecorder(stream);
       audioChunks = [];
