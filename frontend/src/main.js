@@ -295,8 +295,24 @@ const createWindow = () => {
 
   mainWindowRef = mainWindow;
 
-  // IPC: quit
-  ipcMain.on("quit-app", () => app.quit());
+  // IPC: quit - shutdown Flask backend then quit Electron
+  ipcMain.on("quit-app", () => {
+    const shutdownFlask = async () => {
+      try {
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), 1000);
+        await fetch("http://127.0.0.1:5000/shutdown", {
+          method: "POST",
+          signal: ctrl.signal,
+        });
+        clearTimeout(t);
+      } catch (_) {
+        // Backend may not be running - continue to quit
+      }
+      app.quit();
+    };
+    shutdownFlask();
+  });
 
   // Click-through: overlay ignores mouse except over notch (notch stays clickable)
   let notchBounds = null; // { x, y, width, height } in window coordinates

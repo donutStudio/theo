@@ -2,6 +2,7 @@ import io
 import logging
 import threading
 from datetime import datetime
+import os
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -274,6 +275,13 @@ def ai():
 
     # Fallback: unknown classification
     return jsonify({"ok": False, "error": "Unknown classification", "classification": classification}), 400
+
+
+@app.route("/shutdown", methods=["POST"])
+def shutdown():
+    """Shutdown the Flask server (called by Electron on quit)."""
+    logger.info("Shutdown requested by Electron")
+    os._exit(0)
 
 
 if __name__ == "__main__":
