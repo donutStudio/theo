@@ -16,7 +16,7 @@ from services.aiService.aiService import (
     run_main_llm,
 )
 from services.scriptClient.scriptClient import run_script
-from services.TTS.ttsClient import speak_text
+from services.TTS.ttsClient import speak_text, stop_playback
 from utils.audioFeedback.audioFeedback import play_image_error_sound
 from utils.audioFeedback.audioFeedback import play_warning_sound
 from utils.imageProcessor.imageProcessor import image_processor
@@ -275,6 +275,13 @@ def ai():
 
     # Fallback: unknown classification
     return jsonify({"ok": False, "error": "Unknown classification", "classification": classification}), 400
+
+
+@app.route("/stop-tts", methods=["POST"])
+def stop_tts():
+    """Stop current TTS playback (called when user interrupts with Ctrl+Win)."""
+    stop_playback()
+    return jsonify({"ok": True}), 200
 
 
 @app.route("/shutdown", methods=["POST"])

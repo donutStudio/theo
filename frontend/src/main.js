@@ -139,21 +139,36 @@ const COOLDOWN_AFTER_RELEASE_MS = 2000;
 let lastTriggerAt = 0;
 let lastReleaseAt = 0;
 
+// Output playing: TTS is playing. Allow Ctrl+Win to interrupt and ask new prompt.
+// For AGENT mode, we only set this after script is done (when fetch returns).
+let outputPlaying = false;
+
 // Global keyboard listener
 let gkl = null;
+
+ipcMain.handle("set-output-playing", (_event, payload) => {
+  outputPlaying = Boolean(payload?.playing);
+  return { ok: true };
+});
 
 const handleCtrlWinPress = () => {
   const now = Date.now();
   if (clickThroughEnabled) return;
   if (isInputLocked()) return;
   if (now - lastTriggerAt < TRIGGER_LOCKOUT_MS) return;
-  if (lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS)
+  // Bypass cooldown when TTS is playing (user can interrupt to ask new prompt)
+  const canInterrupt = outputPlaying;
+  if (!canInterrupt && lastReleaseAt > 0 && now - lastReleaseAt < COOLDOWN_AFTER_RELEASE_MS)
     return;
   if (!bothKeysReleased) return;
 
   ctrlWinPressed = true;
   bothKeysReleased = false;
   lastTriggerAt = now;
+  if (outputPlaying) {
+    outputPlaying = false;
+    fetch("http://127.0.0.1:5000/stop-tts", { method: "POST" }).catch(() => {});
+  }
   console.log("[STT] Ctrl+Win pressed - sending ctrl-win-key-down to renderer");
 
   if (mainWindowRef?.webContents) {
