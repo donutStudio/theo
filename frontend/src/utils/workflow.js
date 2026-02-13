@@ -1,5 +1,6 @@
 const AI_URL = "http://127.0.0.1:5000/ai";
 const CLASSIFY_URL = "http://127.0.0.1:5000/ai/classify";
+const TTS_STATUS_URL = "http://127.0.0.1:5000/tts/status";
 
 async function setInputLock(lock) {
   if (!window.electron?.ipcRenderer?.invoke) return;
@@ -30,6 +31,30 @@ async function setOutputPlaying(playing) {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForTtsStart({
+  timeoutMs = 3500,
+  pollMs = 120,
+} = {}) {
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < timeoutMs) {
+    try {
+      const res = await fetch(TTS_STATUS_URL);
+      if (res.ok) {
+        const data = await res.json();
+        if (data?.playing) return true;
+      }
+    } catch (err) {
+      console.warn("[AI] Failed to poll TTS status:", err);
+    }
+    await sleep(pollMs);
+  }
+  return false;
+}
+
 export async function aiGO(text) {
   if (!text) return;
   await setOutputPlaying(false);
@@ -53,7 +78,12 @@ export async function aiGO(text) {
     queueMicrotask(() => window.dispatchEvent(new CustomEvent("ai-loading-start")));
     const response = await fetch(url);
     if (response.ok) {
-      await setOutputPlaying(true);
+      const ttsStarted = await waitForTtsStart();
+      if (ttsStarted) {
+        await setOutputPlaying(true);
+      } else {
+        console.warn("[AI] TTS did not report active playback before timeout");
+      }
     } else {
       const body = await response.text();
       console.error("[AI] Request failed:", response.status, body);
