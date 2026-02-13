@@ -1,5 +1,5 @@
-# Screenshot capture with coordinate grid overlay at native resolution.
-# Returns a PIL Image and metadata for in-process LLM usage.
+# Screenshot capture for LLM-driven automation.
+# Can capture the full virtual desktop (all monitors) or the primary display.
 
 import sys
 from ctypes import POINTER, Structure, WINFUNCTYPE, byref, c_long, c_uint, c_void_p, windll
@@ -132,10 +132,10 @@ def _draw_major_labels(draw: ImageDraw.ImageDraw, width: int, height: int) -> No
         )
 
 
-def image_processor():
+def image_processor(with_grid: bool = False, capture_all_monitors: bool = True):
     with mss.mss() as sct:
-        primary = _select_primary_monitor(sct)
-        screenshot = sct.grab(primary)
+        monitor = sct.monitors[0] if capture_all_monitors else _select_primary_monitor(sct)
+        screenshot = sct.grab(monitor)
 
         if screenshot is None:
             raise RuntimeError("Failed to capture screenshot")
@@ -145,10 +145,11 @@ def image_processor():
         img = Image.frombytes("RGBA", (width, height), screenshot.bgra)
         img = img.convert("RGB")
 
-        # overlay grid
-        draw = ImageDraw.Draw(img)
-        _draw_grid(draw, width, height)
-        _draw_major_labels(draw, width, height)
+        if with_grid:
+            # Debug/testing only. Keep disabled in automation path to avoid UI occlusion.
+            draw = ImageDraw.Draw(img)
+            _draw_grid(draw, width, height)
+            _draw_major_labels(draw, width, height)
 
         # No resize here: preserve exact screen coordinate mapping.
 
@@ -156,6 +157,9 @@ def image_processor():
         "image": img,
         "width": width,
         "height": height,
-        "grid": {"minor": MINOR_SPACING, "major": MAJOR_SPACING},
+        "origin_left": int(monitor["left"]),
+        "origin_top": int(monitor["top"]),
+        "capture_mode": "all_monitors" if capture_all_monitors else "primary_monitor",
+        "grid": {"minor": MINOR_SPACING, "major": MAJOR_SPACING} if with_grid else None,
         "scale": SCALE_FACTOR,
     }

@@ -42,12 +42,23 @@ def build_main_input(
     width = meta.get("width", 0)
     height = meta.get("height", 0)
     grid = meta.get("grid", {})
+    origin_left = int(meta.get("origin_left", 0))
+    origin_top = int(meta.get("origin_top", 0))
+    capture_mode = meta.get("capture_mode", "primary_monitor")
     scale = meta.get("scale", 1.0)
+
+    if grid:
+        grid_text = f"grid minor={grid.get('minor', 10)}, major={grid.get('major', 100)}, "
+    else:
+        grid_text = "grid=none, "
 
     meta_text = (
         f"Screenshot metadata: width={width}, height={height}, "
-        f"grid minor={grid.get('minor', 10)}, major={grid.get('major', 100)}, "
-        f"scale={scale}. Use these coordinates for PyAutoGUI when generating agent scripts."
+        f"{grid_text}origin_left={origin_left}, origin_top={origin_top}, "
+        f"capture_mode={capture_mode}, scale={scale}. "
+        "Coordinates from the screenshot are local image coordinates. "
+        "Convert to real screen coordinates with screen_x=origin_left+x and screen_y=origin_top+y. "
+        "For click actions, prefer click_and_verify(x, y, label=...) so runtime can verify UI changed."
     )
 
     user_content = (
