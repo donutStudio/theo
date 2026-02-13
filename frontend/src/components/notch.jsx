@@ -2,17 +2,185 @@ import { useState, useEffect, useRef } from "react";
 import mascot from "../assets/mascot.png";
 import ping1 from "../assets/ping1.mp3";
 import ping2 from "../assets/ping2.mp3";
+import {
+  enumerateDevices,
+  getSavedMicDeviceId,
+  getSavedSpeakerDeviceId,
+  getSavedNotchPosition,
+  getSavedStartupSoundFull,
+  saveMicDeviceId,
+  saveSpeakerDeviceId,
+  saveNotchPosition,
+  saveStartupSoundFull,
+  applySpeakerToElement,
+} from "../utils/settingsUtil";
+
+function SettingsModal({ onClose, onSave }) {
+  const [mics, setMics] = useState([]);
+  const [speakers, setSpeakers] = useState([]);
+  const [selectedMicId, setSelectedMicId] = useState("");
+  const [selectedSpeakerId, setSelectedSpeakerId] = useState("");
+  const [startupEnabled, setStartupEnabled] = useState(false);
+  const [startupSoundFull, setStartupSoundFull] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [setSinkIdSupported, setSetSinkIdSupported] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      const [devicesResult, startupResult] = await Promise.all([
+        enumerateDevices(),
+        window.electron?.getStartupEnabled?.() ?? Promise.resolve({ enabled: false }),
+      ]);
+      if (cancelled) return;
+      setMics(devicesResult.mics);
+      setSpeakers(devicesResult.speakers);
+      const savedMic = getSavedMicDeviceId();
+      const savedSpeaker = getSavedSpeakerDeviceId();
+      const micExists = devicesResult.mics.some((d) => d.deviceId === savedMic);
+      const speakerExists = devicesResult.speakers.some((d) => d.deviceId === savedSpeaker);
+      setSelectedMicId(micExists ? savedMic : "");
+      setSelectedSpeakerId(speakerExists ? savedSpeaker : "");
+      setStartupEnabled(Boolean(startupResult?.enabled));
+      setStartupSoundFull(getSavedStartupSoundFull());
+      const audio = document.createElement("audio");
+      setSetSinkIdSupported(typeof audio.setSinkId === "function");
+      setLoading(false);
+    };
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const handleSave = async () => {
+    saveMicDeviceId(selectedMicId || "");
+    saveSpeakerDeviceId(selectedSpeakerId || "");
+    saveStartupSoundFull(startupSoundFull);
+    if (window.electron?.setStartupEnabled) {
+      try {
+        await window.electron.setStartupEnabled(startupEnabled);
+      } catch (err) {
+        console.warn("[Settings] Failed to set startup:", err);
+      }
+    }
+    onSave();
+  };
+
+  return (
+    <div className="modal-box brandbg border-2 rounded-4xl p-8 border-black relative">
+      <form method="dialog" className="absolute top-4 right-4">
+        <button
+          type="button"
+          className="btn btn-ghost btn-sm p-0 w-8 h-8 min-h-0 border-0 hover:bg-transparent hover:border-0 hover:scale-100"
+          onClick={onClose}
+        >
+          <i className="bi bi-x-circle-fill text-2xl"></i>
+        </button>
+      </form>
+      <h3 className="font-semibold text-3xl bric">Settings</h3>
+      <p className="text-gray-500 inter text-sm font-light mt-1.5">
+        Configure microphone, speaker, and startup behavior.
+      </p>
+
+      {loading ? (
+        <p className="text-gray-500 inter text-sm mt-4">Loading devices...</p>
+      ) : (
+        <div className="mt-6 flex flex-col gap-4">
+          <div>
+            <label className="font-medium bric text-sm">Microphone</label>
+            <select
+              className="select select-bordered settings-select w-full mt-1 border-gray-400 rounded-xl"
+              value={selectedMicId}
+              onChange={(e) => setSelectedMicId(e.target.value)}
+            >
+              <option value="">Default device</option>
+              {mics.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Microphone ${d.deviceId.slice(0, 8)}`}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className="font-medium bric text-sm">Speaker / Output</label>
+            <select
+              className="select select-bordered settings-select w-full mt-1 border-gray-400 rounded-xl"
+              value={selectedSpeakerId}
+              onChange={(e) => setSelectedSpeakerId(e.target.value)}
+            >
+              <option value="">Default device</option>
+              {speakers.map((d) => (
+                <option key={d.deviceId} value={d.deviceId}>
+                  {d.label || `Speaker ${d.deviceId.slice(0, 8)}`}
+                </option>
+              ))}
+            </select>
+            {!setSinkIdSupported && (
+              <p className="text-amber-600 text-xs mt-1 inter">
+                Speaker selection not supported on this platform.
+              </p>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="font-medium bric text-sm">Launch Theo at startup</label>
+            <input
+              type="checkbox"
+              className="toggle toggle-primary"
+              checked={startupEnabled}
+              onChange={(e) => setStartupEnabled(e.target.checked)}
+            />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <label className="font-medium bric text-sm">Full startup sound</label>
+            <input
+              type="checkbox"
+              className="toggle toggle-primary"
+              checked={startupSoundFull}
+              onChange={(e) => setStartupSoundFull(e.target.checked)}
+            />
+          </div>
+          <p className="text-gray-500 inter text-xs -mt-2">
+            When off, plays a simple ping instead of the full startup sound.
+          </p>
+        </div>
+      )}
+
+      <div className="mt-6 flex gap-2 justify-end">
+        <button
+          type="button"
+          className="btn btn-ghost border border-gray-400 rounded-full hover:bg-gray-100"
+          onClick={onClose}
+        >
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="btn bric tracking-wide brandbgdark text-white border-0 rounded-full"
+          onClick={handleSave}
+          disabled={loading}
+        >
+          Save
+        </button>
+      </div>
+    </div>
+  );
+}
 
 function Notch({ taskbarHeight = 0 }) {
   const bottomOffset = taskbarHeight + 10;
   const [isHovered, setIsHovered] = useState(false);
-  const [position, setPosition] = useState("bottom-left");
+  const [position, setPosition] = useState(getSavedNotchPosition);
   const [isCtrlWinHeld, setIsCtrlWinHeld] = useState(false);
   const [helpCenterOpen, setHelpCenterOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [clickThroughEnabled, setClickThroughEnabled] = useState(false);
   const [outputPlaying, setOutputPlaying] = useState(false);
   const [screenSize, setScreenSize] = useState({ width: 1920, height: 1080 });
   const helpCenterDialogRef = useRef(null);
+  const settingsDialogRef = useRef(null);
   const humanInputConfirmRef = useRef(null);
   const notchContainerRef = useRef(null);
   const ping1Audio = useRef(null);
@@ -57,6 +225,15 @@ function Notch({ taskbarHeight = 0 }) {
     // Preload audio
     ping1Audio.current.load();
     ping2Audio.current.load();
+
+    const applySink = () => {
+      const id = getSavedSpeakerDeviceId();
+      if (id && ping1Audio.current) applySpeakerToElement(ping1Audio.current, id);
+      if (id && ping2Audio.current) applySpeakerToElement(ping2Audio.current, id);
+    };
+    applySink();
+    window.addEventListener("settings-devices-changed", applySink);
+    return () => window.removeEventListener("settings-devices-changed", applySink);
   }, []);
 
   // Listen for Ctrl+Win key events
@@ -151,6 +328,17 @@ function Notch({ taskbarHeight = 0 }) {
       dialog.close();
     }
   }, [helpCenterOpen]);
+
+  // Settings dialog
+  useEffect(() => {
+    const dialog = settingsDialogRef.current;
+    if (!dialog) return;
+    if (settingsOpen) {
+      dialog.showModal();
+    } else {
+      dialog.close();
+    }
+  }, [settingsOpen]);
 
   useEffect(() => {
     if (!window.electron?.setNotchBounds || !notchContainerRef.current) return;
@@ -261,7 +449,10 @@ function Notch({ taskbarHeight = 0 }) {
               className={`tooltip border ${tooltipDirClass}`}
               data-tip="Settings"
             >
-              <button className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0">
+              <button
+                onClick={() => setSettingsOpen(true)}
+                className="btn btn-sm btn-ghost text-lg brandbgdark text-white rounded-full shrink-0 transition-transform duration-200 hover:scale-110 border-0 hover:border-0"
+              >
                 <i className="bi bi-gear-fill"></i>
               </button>
             </div>
@@ -399,6 +590,27 @@ function Notch({ taskbarHeight = 0 }) {
         </div>
       </dialog>
 
+      {/* Settings modal */}
+      <dialog
+        ref={settingsDialogRef}
+        className="modal"
+        onCancel={() => setSettingsOpen(false)}
+        onClick={(e) => {
+          if (e.target === settingsDialogRef.current)
+            setSettingsOpen(false);
+        }}
+      >
+        <div onClick={(e) => e.stopPropagation()}>
+          <SettingsModal
+          onClose={() => setSettingsOpen(false)}
+          onSave={() => {
+            setSettingsOpen(false);
+            window.dispatchEvent(new CustomEvent("settings-devices-changed"));
+          }}
+        />
+        </div>
+      </dialog>
+
       <dialog ref={humanInputConfirmRef} className="modal" onCancel={() => {}}>
         <div className="modal-box brandbg border-2 rounded-4xl p-8 border-black relative">
           <form method="dialog" className="absolute top-4 right-4">
@@ -459,7 +671,10 @@ function Notch({ taskbarHeight = 0 }) {
           </p>
           <div id="moveButtons" className="mt-5 flex flex-col gap-3">
             <button
-              onClick={() => setPosition("bottom-left")}
+              onClick={() => {
+              setPosition("bottom-left");
+              saveNotchPosition("bottom-left");
+            }}
               className={moveBtnClass("bottom-left")}
             >
               <span>Bottom-Left</span>
@@ -468,7 +683,10 @@ function Notch({ taskbarHeight = 0 }) {
               </span>
             </button>
             <button
-              onClick={() => setPosition("top-left")}
+              onClick={() => {
+              setPosition("top-left");
+              saveNotchPosition("top-left");
+            }}
               className={moveBtnClass("top-left")}
             >
               <span>Top-Left</span>
@@ -477,7 +695,10 @@ function Notch({ taskbarHeight = 0 }) {
               </span>
             </button>
             <button
-              onClick={() => setPosition("bottom-right")}
+              onClick={() => {
+              setPosition("bottom-right");
+              saveNotchPosition("bottom-right");
+            }}
               className={moveBtnClass("bottom-right")}
             >
               <span>Bottom-Right</span>
@@ -486,7 +707,10 @@ function Notch({ taskbarHeight = 0 }) {
               </span>
             </button>
             <button
-              onClick={() => setPosition("top-right")}
+              onClick={() => {
+              setPosition("top-right");
+              saveNotchPosition("top-right");
+            }}
               className={moveBtnClass("top-right")}
             >
               <span>Top-Right</span>

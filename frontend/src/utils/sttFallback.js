@@ -1,4 +1,8 @@
 import inerror from "../assets/verbalpreset/inerror.wav";
+import {
+  getSavedSpeakerDeviceId,
+  applySpeakerToElement,
+} from "./settingsUtil.js";
 
 async function setInputLock(lock) {
   if (!window.electron?.ipcRenderer?.invoke) return;
@@ -23,6 +27,10 @@ function waitForAudioEnd(audio) {
 
 export async function sttFallback() {
   const inerroraudio = new Audio(inerror);
+  const deviceId = getSavedSpeakerDeviceId();
+  if (deviceId) {
+    applySpeakerToElement(inerroraudio, deviceId).catch(() => {});
+  }
   await setInputLock(true);
   try {
     await inerroraudio.play();

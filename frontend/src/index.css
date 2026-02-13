@@ -52,3 +52,9 @@ body {
 .brandborderdark {
   border-color: rgb(187, 154, 255);
 }
+
+/* Settings dropdowns: match modal background */
+.settings-select,
+.settings-select option {
+  background-color: rgb(242, 234, 255);
+}
