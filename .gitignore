@@ -90,3 +90,13 @@ typings/
 
 # Electron-Forge
 out/
+
+# Python bytecode / cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+
+# Theo generated audio artifacts
+backend/services/TTS/theo_response.wav
+backend/services/TTS/*.wav
