@@ -15,7 +15,7 @@ from services.aiService.aiService import (
     parse_main_output,
     run_main_llm,
 )
-from services.scriptClient.scriptClient import run_script
+from services.scriptClient.scriptClient import run_script, set_screen_origin
 from services.TTS.ttsClient import speak_text, stop_playback
 from utils.audioFeedback.audioFeedback import play_image_error_sound
 from utils.audioFeedback.audioFeedback import play_warning_sound
@@ -87,7 +87,7 @@ def aiGO(user_input: str, classification: str) -> dict:
 
     # screenshot
     try:
-        result = image_processor()
+        result = image_processor(with_grid=False, capture_all_monitors=True)
     except Exception as e:
         logger.exception("Screenshot capture failed")
         play_image_error_sound()
@@ -103,8 +103,12 @@ def aiGO(user_input: str, classification: str) -> dict:
         "width": result["width"],
         "height": result["height"],
         "grid": result["grid"],
+        "origin_left": result.get("origin_left", 0),
+        "origin_top": result.get("origin_top", 0),
+        "capture_mode": result.get("capture_mode", "primary_monitor"),
         "scale": result["scale"],
     }
+    set_screen_origin(meta["origin_left"], meta["origin_top"])
 
 
     SESSION_MEMORY.append({"role": "user", "content": user_input})
@@ -185,11 +189,14 @@ def ping():
 def screenshot():
     """Capture screen with grid overlay; return PIL Image + metadata in-process (no base64)."""
     try:
-        result = image_processor()
+        result = image_processor(with_grid=True, capture_all_monitors=True)
         metadata = {
             "width": result["width"],
             "height": result["height"],
             "grid": result["grid"],
+            "origin_left": result.get("origin_left", 0),
+            "origin_top": result.get("origin_top", 0),
+            "capture_mode": result.get("capture_mode", "primary_monitor"),
             "scale": result["scale"],
         }
         return jsonify(metadata)
@@ -203,7 +210,7 @@ def screenshot():
 def screenshot_preview():
     """Return the screenshot image as PNG for testing (view in browser)."""
     try:
-        result = image_processor()
+        result = image_processor(with_grid=True, capture_all_monitors=True)
         buf = io.BytesIO()
         result["image"].save(buf, format="PNG", optimize=True)
         buf.seek(0)
