@@ -29,7 +29,7 @@ Create a `.env` file in the repo root:
 
 ```
 GROQ_API_KEY=your_groq_key
-OPENAI_KEY=your_openai_key
+OPENAI_API_KEY=your_openai_key
 ```
 
 ## Backend Setup
@@ -49,6 +49,45 @@ From `frontend/`:
 npm install
 npm start
 ```
+
+
+## First Launch Experience
+
+When Theo starts for the first time, it now opens a required setup dialog that asks the user to:
+
+1. Paste a `GROQ_API_KEY`
+2. Paste an `OPENAI_API_KEY`
+3. Choose whether Theo should launch automatically on system startup
+
+These settings can also be changed later from Theo's **Settings** panel.
+
+## Build a Windows `.exe` Installer (Wizard-style NSIS)
+
+From `frontend/`:
+
+```
+npm install
+npm run dist:win
+```
+
+This produces an NSIS `.exe` installer with normal wizard pages (license, install path, progress, finish).
+
+Behavior:
+- Running `Theo Setup *.exe` installs Theo and creates a runnable `Theo.exe`.
+- Installation includes an uninstaller binary in the install directory (e.g. `Uninstall Theo.exe`) plus an uninstall entry in Windows app management.
+- If Theo is already installed, running the installer again prompts to uninstall/reinstall cleanly through the NSIS flow.
+- `npm run dist:win` now writes to a timestamped output folder each run and attempts to close any running `Theo.exe` before packaging, avoiding Windows file-lock failures from prior builds.
+
+Output path:
+
+- `frontend/out-builder/<timestamp>/`
+
+
+### Runtime notes for packaged app
+
+Theo now starts the Flask backend automatically when `Theo.exe` launches (same behavior as running `python backend/app.py` + `npm start` during development).
+
+`npm run dist:win` now compiles and bundles a standalone `theo-backend.exe` into the installer, so end users do not need to install Python or backend dependencies manually.
 
 ## Notes
 
