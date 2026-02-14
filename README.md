@@ -76,10 +76,11 @@ Behavior:
 - Running `Theo Setup *.exe` installs Theo and creates a runnable `Theo.exe`.
 - Installation includes an uninstaller binary in the install directory (e.g. `Uninstall Theo.exe`) plus an uninstall entry in Windows app management.
 - If Theo is already installed, running the installer again prompts to uninstall/reinstall cleanly through the NSIS flow.
+- `npm run dist:win` now writes to a timestamped output folder each run and attempts to close any running `Theo.exe` before packaging, avoiding Windows file-lock failures from prior builds.
 
 Output path:
 
-- `frontend/out-builder/`
+- `frontend/out-builder/<timestamp>/`
 
 ## Notes
 

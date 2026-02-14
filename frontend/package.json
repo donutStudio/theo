@@ -11,7 +11,7 @@
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
     "build:electron": "vite build --config vite.main.config.mjs && vite build --config vite.preload.config.mjs && vite build --config vite.renderer.config.mjs",
-    "dist:win": "npm run build:electron && npx electron-builder --win nsis"
+    "dist:win": "node scripts/dist-win.cjs"
   },
   "keywords": [],
   "author": {
