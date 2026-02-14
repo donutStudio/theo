@@ -41,7 +41,22 @@ const getBackendDir = () => {
   return path.join(__dirname, "../../backend");
 };
 
+const getBundledPythonPath = () => {
+  if (!app.isPackaged) return null;
+  const exe = process.platform === "win32" ? "python.exe" : "python3";
+  const candidate =
+    process.platform === "win32"
+      ? path.join(process.resourcesPath, "python-runtime", "Scripts", exe)
+      : path.join(process.resourcesPath, "python-runtime", "bin", exe);
+  return fs.existsSync(candidate) ? candidate : null;
+};
+
 const resolvePythonCommand = () => {
+  const bundledPython = getBundledPythonPath();
+  if (bundledPython) {
+    return [{ cmd: bundledPython, args: [] }];
+  }
+
   if (process.platform === "win32") {
     return [
       { cmd: "py", args: ["-3"] },
@@ -625,6 +640,13 @@ const createWindow = () => {
   } else {
     mainWindow.loadFile(distRendererPath);
   }
+
+  mainWindow.webContents.on("did-fail-load", (_event, code, desc, validatedURL) => {
+    console.error(`[UI] Failed to load (${code}) ${desc}: ${validatedURL}`);
+  });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[UI] Renderer process gone:", details?.reason || details);
+  });
 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();

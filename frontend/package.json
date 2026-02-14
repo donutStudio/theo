@@ -95,6 +95,13 @@
           "!**/.venv/**",
           "!**/venv/**"
         ]
+      },
+      {
+        "from": "python-runtime",
+        "to": "python-runtime",
+        "filter": [
+          "**/*"
+        ]
       }
     ]
   }
