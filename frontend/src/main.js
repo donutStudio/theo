@@ -36,6 +36,23 @@ if (started) {
   app.quit();
 }
 
+// Settings: startup (launch at login)
+ipcMain.handle("get-startup-enabled", () => {
+  const settings = app.getLoginItemSettings();
+  return { enabled: Boolean(settings?.openAtLogin) };
+});
+
+ipcMain.handle("set-startup-enabled", (_event, { enabled }) => {
+  try {
+    app.setLoginItemSettings({ openAtLogin: Boolean(enabled) });
+    const settings = app.getLoginItemSettings();
+    return { ok: true, enabled: Boolean(settings?.openAtLogin) };
+  } catch (err) {
+    console.error("[Settings] set-startup-enabled failed:", err?.message || err);
+    return { ok: false, enabled: app.getLoginItemSettings()?.openAtLogin ?? false };
+  }
+});
+
 // IPC handler for taskbar height
 ipcMain.handle("get-taskbar-height", () => {
   const primaryDisplay = screen.getPrimaryDisplay();

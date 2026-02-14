@@ -21,6 +21,9 @@ contextBridge.exposeInMainWorld("electron", {
   env,
   openExternal: (url) => ipcRenderer.invoke("open-external", url),
   getScreenSize: () => ipcRenderer.invoke("get-screen-size"),
+  getStartupEnabled: () => ipcRenderer.invoke("get-startup-enabled"),
+  setStartupEnabled: (enabled) =>
+    ipcRenderer.invoke("set-startup-enabled", { enabled }),
   setClickThrough: (enabled, agentMode) =>
     ipcRenderer.invoke("set-click-through", { enabled, agentMode }),
   setNotchBounds: (bounds) => ipcRenderer.invoke("set-notch-bounds", bounds),
