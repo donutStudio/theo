@@ -82,6 +82,18 @@ Output path:
 
 - `frontend/out-builder/<timestamp>/`
 
+
+### Runtime notes for packaged app
+
+Theo now starts the Flask backend automatically when `Theo.exe` launches (same behavior as running `python backend/app.py` + `npm start` during development).
+
+On Windows, ensure Python and backend dependencies are installed on the target machine:
+
+```
+cd backend
+pip install -r requirements.txt
+```
+
 ## Notes
 
 - The backend runs locally at `http://127.0.0.1:5000`.

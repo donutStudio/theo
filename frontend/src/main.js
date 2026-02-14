@@ -22,6 +22,7 @@ import { app, BrowserWindow, Menu, screen, ipcMain, shell } from "electron";
 import path from "node:path";
 import fs from "node:fs";
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
 import started from "electron-squirrel-startup";
 import { GlobalKeyboardListener } from "node-global-key-listener";
 
@@ -30,6 +31,112 @@ const require = createRequire(import.meta.url);
 let mainWindowRef = null;
 let inputLockCount = 0;
 let clickThroughEnabled = false;
+
+let backendProcess = null;
+
+const getBackendDir = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "backend");
+  }
+  return path.join(__dirname, "../../backend");
+};
+
+const resolvePythonCommand = () => {
+  if (process.platform === "win32") {
+    return [
+      { cmd: "py", args: ["-3"] },
+      { cmd: "python", args: [] },
+      { cmd: "python3", args: [] },
+    ];
+  }
+  return [
+    { cmd: "python3", args: [] },
+    { cmd: "python", args: [] },
+  ];
+};
+
+const startBackend = async () => {
+  if (backendProcess && !backendProcess.killed) return;
+
+  const backendDir = getBackendDir();
+  const backendEntry = path.join(backendDir, "app.py");
+  if (!fs.existsSync(backendEntry)) {
+    console.error(`[Backend] app.py not found at ${backendEntry}`);
+    return;
+  }
+
+  const attempts = resolvePythonCommand();
+  for (const attempt of attempts) {
+    try {
+      const child = spawn(attempt.cmd, [...attempt.args, backendEntry], {
+        cwd: backendDir,
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: "1",
+        },
+        windowsHide: true,
+        stdio: "pipe",
+      });
+
+      let started = false;
+      const startupTimer = setTimeout(() => {
+        if (!started) {
+          child.kill();
+        }
+      }, 3000);
+
+      child.stdout?.on("data", (chunk) => {
+        const msg = String(chunk || "").trim();
+        if (msg) console.log(`[Backend] ${msg}`);
+      });
+      child.stderr?.on("data", (chunk) => {
+        const msg = String(chunk || "").trim();
+        if (msg) console.error(`[Backend] ${msg}`);
+      });
+
+      const exitCode = await new Promise((resolve) => {
+        child.once("error", () => resolve(-999));
+        child.once("exit", (code) => resolve(typeof code === "number" ? code : -1));
+        setTimeout(() => {
+          if (!child.killed) {
+            started = true;
+            resolve(999);
+          }
+        }, 600);
+      });
+
+      clearTimeout(startupTimer);
+      if (exitCode === 999) {
+        backendProcess = child;
+        backendProcess.on("exit", (code) => {
+          console.log(`[Backend] exited with code ${code}`);
+          backendProcess = null;
+        });
+        console.log(`[Backend] Started with ${attempt.cmd} ${attempt.args.join(" ")}`);
+        return;
+      }
+    } catch (err) {
+      console.error(`[Backend] Failed to launch with ${attempt.cmd}:`, err?.message || err);
+    }
+  }
+
+  console.error("[Backend] Could not start backend process. Ensure Python + backend deps are installed.");
+};
+
+const stopBackend = async () => {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1000);
+    await fetch("http://127.0.0.1:5000/shutdown", { method: "POST", signal: ctrl.signal });
+    clearTimeout(t);
+  } catch (_) {
+    // ignore
+  }
+
+  if (backendProcess && !backendProcess.killed) {
+    backendProcess.kill();
+  }
+};
 
 const APP_CONFIG_PATH = path.join(app.getPath("userData"), "theo-config.json");
 
@@ -428,17 +535,7 @@ const createWindow = () => {
   // IPC: quit - shutdown Flask backend then quit Electron
   ipcMain.on("quit-app", () => {
     const shutdownFlask = async () => {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 1000);
-        await fetch("http://127.0.0.1:5000/shutdown", {
-          method: "POST",
-          signal: ctrl.signal,
-        });
-        clearTimeout(t);
-      } catch (_) {
-        // Backend may not be running - continue to quit
-      }
+      await stopBackend();
       app.quit();
     };
     shutdownFlask();
@@ -507,12 +604,26 @@ const createWindow = () => {
 
   Menu.setApplicationMenu(null);
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  const devServerUrl =
+    typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== "undefined"
+      ? MAIN_WINDOW_VITE_DEV_SERVER_URL
+      : process.env.MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  const viteRendererName =
+    typeof MAIN_WINDOW_VITE_NAME !== "undefined"
+      ? MAIN_WINDOW_VITE_NAME
+      : "main_window";
+  const forgeRendererPath = path.join(
+    __dirname,
+    `../renderer/${viteRendererName}/index.html`,
+  );
+  const distRendererPath = path.join(__dirname, "../dist/index.html");
+
+  if (devServerUrl) {
+    mainWindow.loadURL(devServerUrl);
+  } else if (fs.existsSync(forgeRendererPath)) {
+    mainWindow.loadFile(forgeRendererPath);
   } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
+    mainWindow.loadFile(distRendererPath);
   }
 
   mainWindow.once("ready-to-show", () => {
@@ -526,7 +637,8 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startBackend();
   createWindow();
 
   // start key listener in background so a slow/hanging spawn doesn't block the window
@@ -540,8 +652,9 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("will-quit", () => {
+app.on("will-quit", async () => {
   if (gkl) gkl.kill();
+  await stopBackend();
 });
 
 app.on("window-all-closed", () => {
