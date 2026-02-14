@@ -3,7 +3,7 @@
   "productName": "Theo",
   "version": "1.0.0",
   "description": "Theo desktop accessibility assistant",
-  "main": ".vite/build/main.js",
+  "main": "dist-electron/main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
@@ -11,7 +11,7 @@
     "publish": "electron-forge publish",
     "lint": "echo \"No linting configured\"",
     "build:electron": "vite build --config vite.main.config.mjs && vite build --config vite.preload.config.mjs && vite build --config vite.renderer.config.mjs",
-    "dist:win": "npm run build:electron && electron-builder --win nsis"
+    "dist:win": "npm run build:electron && npx electron-builder --win nsis"
   },
   "keywords": [],
   "author": {
@@ -52,9 +52,11 @@
       "output": "out-builder"
     },
     "files": [
-      ".vite/**/*",
-      "node_modules/**/*",
-      "package.json"
+      "dist-electron/**/*",
+      "dist/**/*",
+      "src/assets/**/*",
+      "package.json",
+      "node_modules/**/*"
     ],
     "win": {
       "target": [
@@ -71,8 +73,14 @@
       "allowToChangeInstallationDirectory": true,
       "perMachine": false,
       "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
       "shortcutName": "Theo",
+      "uninstallDisplayName": "Theo",
+      "deleteAppDataOnUninstall": false,
       "license": "../LICENSE"
+    },
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
     }
   }
 }
