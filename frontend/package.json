@@ -9,7 +9,9 @@
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "build:electron": "vite build --config vite.main.config.mjs && vite build --config vite.preload.config.mjs && vite build --config vite.renderer.config.mjs",
+    "dist:win": "npm run build:electron && electron-builder --win nsis"
   },
   "keywords": [],
   "author": {
@@ -30,7 +32,8 @@
     "@tailwindcss/vite": "^4.1.18",
     "electron": "39.2.7",
     "tailwindcss": "^4.1.18",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "electron-builder": "^24.13.3"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^4.7.0",
@@ -41,5 +44,35 @@
     "node-global-key-listener": "^0.3.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
+  },
+  "build": {
+    "appId": "ai.theo.app",
+    "productName": "Theo",
+    "directories": {
+      "output": "out-builder"
+    },
+    "files": [
+      ".vite/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "shortcutName": "Theo",
+      "license": "../LICENSE"
+    }
   }
 }

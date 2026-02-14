@@ -26,6 +26,8 @@ function SettingsModal({ onClose, onSave }) {
   const [setSinkIdSupported, setSetSinkIdSupported] = useState(true);
   const [groqApiKey, setGroqApiKey] = useState("");
   const [openAIApiKey, setOpenAIApiKey] = useState("");
+  const [showGroqApiKey, setShowGroqApiKey] = useState(false);
+  const [showOpenAIApiKey, setShowOpenAIApiKey] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -140,24 +142,42 @@ function SettingsModal({ onClose, onSave }) {
 
           <div>
             <label className="font-medium bric text-sm">GROQ_API_KEY</label>
-            <input
-              type="password"
-              className="input input-bordered settings-select w-full mt-1 border-gray-400 rounded-xl"
-              value={groqApiKey}
-              placeholder="Paste your Groq API key"
-              onChange={(e) => setGroqApiKey(e.target.value)}
-            />
+            <div className="flex gap-2 mt-1">
+              <input
+                type={showGroqApiKey ? "text" : "password"}
+                className="input input-bordered settings-select flex-1 border-gray-400 rounded-xl"
+                value={groqApiKey}
+                placeholder="Paste your Groq API key"
+                onChange={(e) => setGroqApiKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost border border-gray-400 rounded-xl"
+                onClick={() => setShowGroqApiKey((v) => !v)}
+              >
+                {showGroqApiKey ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
 
           <div>
             <label className="font-medium bric text-sm">OPENAI_API_KEY</label>
-            <input
-              type="password"
-              className="input input-bordered settings-select w-full mt-1 border-gray-400 rounded-xl"
-              value={openAIApiKey}
-              placeholder="Paste your OpenAI API key"
-              onChange={(e) => setOpenAIApiKey(e.target.value)}
-            />
+            <div className="flex gap-2 mt-1">
+              <input
+                type={showOpenAIApiKey ? "text" : "password"}
+                className="input input-bordered settings-select flex-1 border-gray-400 rounded-xl"
+                value={openAIApiKey}
+                placeholder="Paste your OpenAI API key"
+                onChange={(e) => setOpenAIApiKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost border border-gray-400 rounded-xl"
+                onClick={() => setShowOpenAIApiKey((v) => !v)}
+              >
+                {showOpenAIApiKey ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between">

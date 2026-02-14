@@ -61,16 +61,20 @@ When Theo starts for the first time, it now opens a required setup dialog that a
 
 These settings can also be changed later from Theo's **Settings** panel.
 
-## Build a Windows `.exe` Installer (Electron Forge + Squirrel)
+## Build a Windows `.exe` Installer (Wizard-style NSIS)
 
 From `frontend/`:
 
 ```
 npm install
-npm run make
+npm run dist:win
 ```
 
-The installer is generated in `frontend/out/make/squirrel.windows/x64/` as `TheoInstaller.exe`.
+This produces an NSIS `.exe` installer with normal wizard pages (license, install path, progress, finish).
+
+Output path:
+
+- `frontend/out-builder/`
 
 ## Notes
 
