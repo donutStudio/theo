@@ -1,15 +1,17 @@
 {
-  "name": "my-app",
-  "productName": "my-app",
+  "name": "theo-app",
+  "productName": "Theo",
   "version": "1.0.0",
-  "description": "My Electron application description",
-  "main": ".vite/build/main.js",
+  "description": "Theo desktop accessibility assistant",
+  "main": "dist-electron/main.js",
   "scripts": {
     "start": "electron-forge start",
     "package": "electron-forge package",
     "make": "electron-forge make",
     "publish": "electron-forge publish",
-    "lint": "echo \"No linting configured\""
+    "lint": "echo \"No linting configured\"",
+    "build:electron": "vite build --config vite.main.config.mjs && vite build --config vite.preload.config.mjs && vite build --config vite.renderer.config.mjs",
+    "dist:win": "node scripts/dist-win.cjs"
   },
   "keywords": [],
   "author": {
@@ -41,5 +43,43 @@
     "node-global-key-listener": "^0.3.0",
     "react": "^19.2.3",
     "react-dom": "^19.2.3"
+  },
+  "build": {
+    "appId": "ai.theo.app",
+    "productName": "Theo",
+    "directories": {
+      "output": "out-builder"
+    },
+    "files": [
+      "dist-electron/**/*",
+      "dist/**/*",
+      "src/assets/**/*",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Theo",
+      "uninstallDisplayName": "Theo",
+      "deleteAppDataOnUninstall": false,
+      "license": "../LICENSE"
+    },
+    "extraMetadata": {
+      "main": "dist-electron/main.js"
+    }
   }
 }
