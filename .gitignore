@@ -36,6 +36,8 @@ frontend/out-builder
 frontend/dist
 frontend/dist-electron
 frontend/package-lock.json
+frontend/.pyinstalller-build
+frontend/backend-bin
 
 # Dependency directories
 node_modules/
@@ -112,3 +114,13 @@ git rm --cached -- backend/services/TTS/*.wav
 # 4) Commit the cleanup
 git add .gitignore
 git commit -m "Stop tracking pycache and generated wav files"
+frontend/.pyinstaller-build/spec/theo-backend.spec
+frontend/.pyinstaller-build/work/theo-backend/Analysis-00.toc
+frontend/.pyinstaller-build/work/theo-backend/base_library.zip
+frontend/.pyinstaller-build/work/theo-backend/EXE-00.toc
+frontend/.pyinstaller-build/work/theo-backend/PKG-00.toc
+frontend/.pyinstaller-build/work/theo-backend/PYZ-00.pyz
+frontend/.pyinstaller-build/work/theo-backend/PYZ-00.toc
+frontend/.pyinstaller-build/work/theo-backend/theo-backend.pkg
+frontend/.pyinstaller-build/work/theo-backend/warn-theo-backend.txt
+frontend/.pyinstaller-build/work/theo-backend/xref-theo-backend.html
