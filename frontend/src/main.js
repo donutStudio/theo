@@ -221,6 +221,13 @@ const writeAppConfig = (nextConfig) => {
 
 const isInputLocked = () => inputLockCount > 0;
 
+
+const applyPersistedApiConfigToEnv = () => {
+  const persistedConfig = readAppConfig();
+  if (persistedConfig.GROQ_API_KEY) process.env.GROQ_API_KEY = persistedConfig.GROQ_API_KEY;
+  if (persistedConfig.OPENAI_API_KEY) process.env.OPENAI_API_KEY = persistedConfig.OPENAI_API_KEY;
+};
+
 if (started) {
   app.quit();
 }
@@ -313,7 +320,7 @@ ipcMain.handle("get-api-config", () => {
   };
 });
 
-ipcMain.handle("save-api-config", (_event, payload) => {
+ipcMain.handle("save-api-config", async (_event, payload) => {
   const next = writeAppConfig({
     GROQ_API_KEY: payload?.GROQ_API_KEY?.trim?.() || "",
     OPENAI_API_KEY: payload?.OPENAI_API_KEY?.trim?.() || "",
@@ -326,6 +333,10 @@ ipcMain.handle("save-api-config", (_event, payload) => {
   process.env.GROQ_API_KEY = next.GROQ_API_KEY;
   process.env.OPENAI_API_KEY = next.OPENAI_API_KEY;
   refreshGroqClient();
+
+  // Backend imports API clients using env; restart to pick up new keys immediately.
+  await stopBackend();
+  await startBackend();
 
   if (mainWindowRef?.webContents) {
     mainWindowRef.webContents.send("set-env", {
@@ -551,9 +562,7 @@ const createWindow = () => {
 
   // Load .env from project root (theo/.env)
   require("dotenv").config({ path: path.join(__dirname, "../../../.env") });
-  const persistedConfig = readAppConfig();
-  if (persistedConfig.GROQ_API_KEY) process.env.GROQ_API_KEY = persistedConfig.GROQ_API_KEY;
-  if (persistedConfig.OPENAI_API_KEY) process.env.OPENAI_API_KEY = persistedConfig.OPENAI_API_KEY;
+  applyPersistedApiConfigToEnv();
   refreshGroqClient();
 
   // Pass environment variables to renderer
@@ -682,6 +691,8 @@ const createWindow = () => {
 };
 
 app.whenReady().then(async () => {
+  applyPersistedApiConfigToEnv();
+  refreshGroqClient();
   await startBackend();
   createWindow();
 
