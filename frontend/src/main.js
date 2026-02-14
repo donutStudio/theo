@@ -20,7 +20,9 @@ dotenv.config({ path: join(__dirname, "../../../.env") });
 
 import { app, BrowserWindow, Menu, screen, ipcMain, shell } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import { createRequire } from "node:module";
+import { spawn } from "node:child_process";
 import started from "electron-squirrel-startup";
 import { GlobalKeyboardListener } from "node-global-key-listener";
 
@@ -29,6 +31,171 @@ const require = createRequire(import.meta.url);
 let mainWindowRef = null;
 let inputLockCount = 0;
 let clickThroughEnabled = false;
+
+let backendProcess = null;
+
+const getBackendDir = () => {
+  if (app.isPackaged) {
+    return path.join(process.resourcesPath, "backend");
+  }
+  return path.join(__dirname, "../../backend");
+};
+
+const getBundledPythonPath = () => {
+  if (!app.isPackaged) return null;
+  const exe = process.platform === "win32" ? "python.exe" : "python3";
+  const candidate =
+    process.platform === "win32"
+      ? path.join(process.resourcesPath, "python-runtime", "Scripts", exe)
+      : path.join(process.resourcesPath, "python-runtime", "bin", exe);
+  return fs.existsSync(candidate) ? candidate : null;
+};
+
+const resolvePythonCommand = () => {
+  const bundledPython = getBundledPythonPath();
+  if (bundledPython) {
+    return [{ cmd: bundledPython, args: [] }];
+  }
+
+  if (process.platform === "win32") {
+    return [
+      { cmd: "py", args: ["-3"] },
+      { cmd: "python", args: [] },
+      { cmd: "python3", args: [] },
+    ];
+  }
+  return [
+    { cmd: "python3", args: [] },
+    { cmd: "python", args: [] },
+  ];
+};
+
+const startBackend = async () => {
+  if (backendProcess && !backendProcess.killed) return;
+
+  const backendDir = getBackendDir();
+  const backendEntry = path.join(backendDir, "app.py");
+  if (!fs.existsSync(backendEntry)) {
+    console.error(`[Backend] app.py not found at ${backendEntry}`);
+    return;
+  }
+
+  const attempts = resolvePythonCommand();
+  for (const attempt of attempts) {
+    try {
+      const child = spawn(attempt.cmd, [...attempt.args, backendEntry], {
+        cwd: backendDir,
+        env: {
+          ...process.env,
+          PYTHONUNBUFFERED: "1",
+        },
+        windowsHide: true,
+        stdio: "pipe",
+      });
+
+      let started = false;
+      const startupTimer = setTimeout(() => {
+        if (!started) {
+          child.kill();
+        }
+      }, 3000);
+
+      child.stdout?.on("data", (chunk) => {
+        const msg = String(chunk || "").trim();
+        if (msg) console.log(`[Backend] ${msg}`);
+      });
+      child.stderr?.on("data", (chunk) => {
+        const msg = String(chunk || "").trim();
+        if (msg) console.error(`[Backend] ${msg}`);
+      });
+
+      const exitCode = await new Promise((resolve) => {
+        child.once("error", () => resolve(-999));
+        child.once("exit", (code) => resolve(typeof code === "number" ? code : -1));
+        setTimeout(() => {
+          if (!child.killed) {
+            started = true;
+            resolve(999);
+          }
+        }, 600);
+      });
+
+      clearTimeout(startupTimer);
+      if (exitCode === 999) {
+        backendProcess = child;
+        backendProcess.on("exit", (code) => {
+          console.log(`[Backend] exited with code ${code}`);
+          backendProcess = null;
+        });
+        console.log(`[Backend] Started with ${attempt.cmd} ${attempt.args.join(" ")}`);
+        return;
+      }
+    } catch (err) {
+      console.error(`[Backend] Failed to launch with ${attempt.cmd}:`, err?.message || err);
+    }
+  }
+
+  console.error("[Backend] Could not start backend process. Ensure Python + backend deps are installed.");
+};
+
+const stopBackend = async () => {
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 1000);
+    await fetch("http://127.0.0.1:5000/shutdown", { method: "POST", signal: ctrl.signal });
+    clearTimeout(t);
+  } catch (_) {
+    // ignore
+  }
+
+  if (backendProcess && !backendProcess.killed) {
+    backendProcess.kill();
+  }
+};
+
+const APP_CONFIG_PATH = path.join(app.getPath("userData"), "theo-config.json");
+
+const readAppConfig = () => {
+  try {
+    if (!fs.existsSync(APP_CONFIG_PATH)) {
+      return {
+        GROQ_API_KEY: "",
+        OPENAI_API_KEY: "",
+        setupComplete: false,
+      };
+    }
+    const raw = fs.readFileSync(APP_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      GROQ_API_KEY: parsed.GROQ_API_KEY || "",
+      OPENAI_API_KEY: parsed.OPENAI_API_KEY || "",
+      setupComplete: Boolean(parsed.setupComplete),
+    };
+  } catch (err) {
+    console.warn("[Settings] Failed to read app config:", err?.message || err);
+    return { GROQ_API_KEY: "", OPENAI_API_KEY: "", setupComplete: false };
+  }
+};
+
+const writeAppConfig = (nextConfig) => {
+  try {
+    const current = readAppConfig();
+    const merged = {
+      ...current,
+      ...nextConfig,
+      setupComplete:
+        typeof nextConfig?.setupComplete === "boolean"
+          ? nextConfig.setupComplete
+          : current.setupComplete,
+    };
+    fs.mkdirSync(path.dirname(APP_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(APP_CONFIG_PATH, JSON.stringify(merged, null, 2), "utf8");
+    return merged;
+  } catch (err) {
+    console.error("[Settings] Failed to write app config:", err?.message || err);
+    return readAppConfig();
+  }
+};
 
 const isInputLocked = () => inputLockCount > 0;
 
@@ -91,19 +258,62 @@ ipcMain.handle("get-input-lock-state", () => ({
 // Initialize Groq client in main process (uses dotenv loaded earlier)
 let groqClient = null;
 let toFile = null;
-try {
-  // require is used here to avoid import ordering issues in this file
-  const Groq = require("groq-sdk");
-  toFile = require("groq-sdk").toFile;
-  if (process.env.GROQ_API_KEY) {
-    groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    console.log("Groq client initialized in main process");
-  } else {
+const refreshGroqClient = () => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    groqClient = null;
     console.warn("GROQ_API_KEY not set in main process");
+    return;
   }
+  try {
+    const Groq = require("groq-sdk");
+    toFile = require("groq-sdk").toFile;
+    groqClient = new Groq({ apiKey });
+    console.log("Groq client initialized in main process");
+  } catch (err) {
+    groqClient = null;
+    console.error("Failed to initialize Groq in main process:", err);
+  }
+};
+
+try {
+  refreshGroqClient();
 } catch (err) {
   console.error("Failed to initialize Groq in main process:", err);
 }
+
+ipcMain.handle("get-api-config", () => {
+  const config = readAppConfig();
+  return {
+    GROQ_API_KEY: config.GROQ_API_KEY,
+    OPENAI_API_KEY: config.OPENAI_API_KEY,
+    setupComplete: config.setupComplete,
+  };
+});
+
+ipcMain.handle("save-api-config", (_event, payload) => {
+  const next = writeAppConfig({
+    GROQ_API_KEY: payload?.GROQ_API_KEY?.trim?.() || "",
+    OPENAI_API_KEY: payload?.OPENAI_API_KEY?.trim?.() || "",
+    setupComplete:
+      typeof payload?.setupComplete === "boolean"
+        ? payload.setupComplete
+        : undefined,
+  });
+
+  process.env.GROQ_API_KEY = next.GROQ_API_KEY;
+  process.env.OPENAI_API_KEY = next.OPENAI_API_KEY;
+  refreshGroqClient();
+
+  if (mainWindowRef?.webContents) {
+    mainWindowRef.webContents.send("set-env", {
+      GROQ_API_KEY: process.env.GROQ_API_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  return { ok: true, ...next };
+});
 
 // Transcribe audio from renderer (Ctrl+Win recording) and print to terminal
 ipcMain.handle("transcribe-audio", async (_event, arrayBuffer) => {
@@ -319,11 +529,16 @@ const createWindow = () => {
 
   // Load .env from project root (theo/.env)
   require("dotenv").config({ path: path.join(__dirname, "../../../.env") });
+  const persistedConfig = readAppConfig();
+  if (persistedConfig.GROQ_API_KEY) process.env.GROQ_API_KEY = persistedConfig.GROQ_API_KEY;
+  if (persistedConfig.OPENAI_API_KEY) process.env.OPENAI_API_KEY = persistedConfig.OPENAI_API_KEY;
+  refreshGroqClient();
 
   // Pass environment variables to renderer
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.webContents.send("set-env", {
       GROQ_API_KEY: process.env.GROQ_API_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     });
   });
 
@@ -335,17 +550,7 @@ const createWindow = () => {
   // IPC: quit - shutdown Flask backend then quit Electron
   ipcMain.on("quit-app", () => {
     const shutdownFlask = async () => {
-      try {
-        const ctrl = new AbortController();
-        const t = setTimeout(() => ctrl.abort(), 1000);
-        await fetch("http://127.0.0.1:5000/shutdown", {
-          method: "POST",
-          signal: ctrl.signal,
-        });
-        clearTimeout(t);
-      } catch (_) {
-        // Backend may not be running - continue to quit
-      }
+      await stopBackend();
       app.quit();
     };
     shutdownFlask();
@@ -414,13 +619,34 @@ const createWindow = () => {
 
   Menu.setApplicationMenu(null);
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  const devServerUrl =
+    typeof MAIN_WINDOW_VITE_DEV_SERVER_URL !== "undefined"
+      ? MAIN_WINDOW_VITE_DEV_SERVER_URL
+      : process.env.MAIN_WINDOW_VITE_DEV_SERVER_URL;
+  const viteRendererName =
+    typeof MAIN_WINDOW_VITE_NAME !== "undefined"
+      ? MAIN_WINDOW_VITE_NAME
+      : "main_window";
+  const forgeRendererPath = path.join(
+    __dirname,
+    `../renderer/${viteRendererName}/index.html`,
+  );
+  const distRendererPath = path.join(__dirname, "../dist/index.html");
+
+  if (devServerUrl) {
+    mainWindow.loadURL(devServerUrl);
+  } else if (fs.existsSync(forgeRendererPath)) {
+    mainWindow.loadFile(forgeRendererPath);
   } else {
-    mainWindow.loadFile(
-      path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`),
-    );
+    mainWindow.loadFile(distRendererPath);
   }
+
+  mainWindow.webContents.on("did-fail-load", (_event, code, desc, validatedURL) => {
+    console.error(`[UI] Failed to load (${code}) ${desc}: ${validatedURL}`);
+  });
+  mainWindow.webContents.on("render-process-gone", (_event, details) => {
+    console.error("[UI] Renderer process gone:", details?.reason || details);
+  });
 
   mainWindow.once("ready-to-show", () => {
     mainWindow.show();
@@ -433,7 +659,8 @@ const createWindow = () => {
   });
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await startBackend();
   createWindow();
 
   // start key listener in background so a slow/hanging spawn doesn't block the window
@@ -447,8 +674,9 @@ app.whenReady().then(() => {
   });
 });
 
-app.on("will-quit", () => {
+app.on("will-quit", async () => {
   if (gkl) gkl.kill();
+  await stopBackend();
 });
 
 app.on("window-all-closed", () => {
