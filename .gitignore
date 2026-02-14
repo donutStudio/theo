@@ -33,6 +33,8 @@ coverage
 build/Release
 frontend/out
 frontend/out-builder
+frontend/dist
+frontend/dist-electron
 
 # Dependency directories
 node_modules/
