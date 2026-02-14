@@ -29,7 +29,7 @@ Create a `.env` file in the repo root:
 
 ```
 GROQ_API_KEY=your_groq_key
-OPENAI_KEY=your_openai_key
+OPENAI_API_KEY=your_openai_key
 ```
 
 ## Backend Setup
@@ -49,6 +49,32 @@ From `frontend/`:
 npm install
 npm start
 ```
+
+
+## First Launch Experience
+
+When Theo starts for the first time, it now opens a required setup dialog that asks the user to:
+
+1. Paste a `GROQ_API_KEY`
+2. Paste an `OPENAI_API_KEY`
+3. Choose whether Theo should launch automatically on system startup
+
+These settings can also be changed later from Theo's **Settings** panel.
+
+## Build a Windows `.exe` Installer (Wizard-style NSIS)
+
+From `frontend/`:
+
+```
+npm install
+npm run dist:win
+```
+
+This produces an NSIS `.exe` installer with normal wizard pages (license, install path, progress, finish).
+
+Output path:
+
+- `frontend/out-builder/`
 
 ## Notes
 
