@@ -72,6 +72,11 @@ npm run dist:win
 
 This produces an NSIS `.exe` installer with normal wizard pages (license, install path, progress, finish).
 
+Behavior:
+- Running `Theo Setup *.exe` installs Theo and creates a runnable `Theo.exe`.
+- Installation includes an uninstaller binary in the install directory (e.g. `Uninstall Theo.exe`) plus an uninstall entry in Windows app management.
+- If Theo is already installed, running the installer again prompts to uninstall/reinstall cleanly through the NSIS flow.
+
 Output path:
 
 - `frontend/out-builder/`
