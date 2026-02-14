@@ -19,6 +19,10 @@ const stamp = [
 ].join("");
 const outputDir = `out-builder/${stamp}`;
 
+const buildVenvDir = path.join(root, ".backend-build-venv");
+const pyInstallerBuildDir = path.join(root, ".pyinstaller-build");
+const backendBinDir = path.join(root, "backend-bin");
+
 const run = (cmd, args, opts = {}) => {
   const result = spawnSync(cmd, args, {
     cwd: root,
@@ -32,28 +36,66 @@ const run = (cmd, args, opts = {}) => {
   return result;
 };
 
-const ensureBundledPythonRuntime = () => {
-  const runtimeDir = path.join(root, "python-runtime");
-  const pythonExe = path.join(runtimeDir, "Scripts", "python.exe");
-
-  if (!fs.existsSync(runtimeDir)) {
-    run("py", ["-3", "-m", "venv", "python-runtime"]);
+const ensureBackendExecutable = () => {
+  if (process.platform !== "win32") {
+    console.log("[Theo] Skipping backend executable build (non-Windows platform).");
+    return;
   }
 
-  if (!fs.existsSync(pythonExe)) {
-    console.error("[Theo] Could not find bundled runtime python.exe after creating venv.");
+  run("taskkill", ["/IM", "Theo.exe", "/F"], { stdio: "ignore", allowFailure: true });
+
+  if (!fs.existsSync(buildVenvDir)) {
+    run("py", ["-3", "-m", "venv", ".backend-build-venv"]);
+  }
+
+  const venvPython = path.join(buildVenvDir, "Scripts", "python.exe");
+  if (!fs.existsSync(venvPython)) {
+    console.error("[Theo] Could not find backend build python at", venvPython);
     process.exit(1);
   }
 
-  run(pythonExe, ["-m", "pip", "install", "--upgrade", "pip"]);
-  run(pythonExe, ["-m", "pip", "install", "-r", path.join(backendDir, "requirements.txt")]);
+  run(venvPython, ["-m", "pip", "install", "--upgrade", "pip"]);
+  run(venvPython, ["-m", "pip", "install", "-r", path.join(backendDir, "requirements.txt")]);
+  run(venvPython, ["-m", "pip", "install", "pyinstaller"]);
+
+  fs.mkdirSync(backendBinDir, { recursive: true });
+  fs.rmSync(pyInstallerBuildDir, { recursive: true, force: true });
+
+  run(venvPython, [
+    "-m",
+    "PyInstaller",
+    path.join(backendDir, "app.py"),
+    "--onefile",
+    "--name",
+    "theo-backend",
+    "--distpath",
+    backendBinDir,
+    "--workpath",
+    path.join(pyInstallerBuildDir, "work"),
+    "--specpath",
+    path.join(pyInstallerBuildDir, "spec"),
+    "--noconfirm",
+    "--clean",
+    "--add-data",
+    `${path.join(backendDir, "services", "aiService", "MAINSYSTEMPROMPT.md")};services/aiService`,
+    "--add-data",
+    `${path.join(backendDir, "utils", "llmclassifer", "CLASSIFERSYSTEMPROMPT.md")};utils/llmclassifer`,
+    "--add-data",
+    `${path.join(backendDir, "utils", "audioFeedback", "outerror.wav")};utils/audioFeedback`,
+    "--add-data",
+    `${path.join(backendDir, "utils", "audioFeedback", "warning.wav")};utils/audioFeedback`,
+  ]);
+
+  const backendExe = path.join(backendBinDir, "theo-backend.exe");
+  if (!fs.existsSync(backendExe)) {
+    console.error("[Theo] Backend executable was not produced at", backendExe);
+    process.exit(1);
+  }
+
+  console.log("[Theo] Backend executable ready:", backendExe);
 };
 
-if (process.platform === "win32") {
-  run("taskkill", ["/IM", "Theo.exe", "/F"], { stdio: "ignore", allowFailure: true });
-  ensureBundledPythonRuntime();
-}
-
+ensureBackendExecutable();
 run("npm", ["run", "build:electron"]);
 run("npx", [
   "electron-builder",

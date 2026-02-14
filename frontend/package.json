@@ -97,10 +97,10 @@
         ]
       },
       {
-        "from": "python-runtime",
-        "to": "python-runtime",
+        "from": "backend-bin",
+        "to": "backend-bin",
         "filter": [
-          "**/*"
+          "theo-backend.exe"
         ]
       }
     ]

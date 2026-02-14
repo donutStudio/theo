@@ -87,7 +87,7 @@ Output path:
 
 Theo now starts the Flask backend automatically when `Theo.exe` launches (same behavior as running `python backend/app.py` + `npm start` during development).
 
-`npm run dist:win` now bundles a Python runtime + backend dependencies into the installer, so end users only need to run the setup wizard and launch Theo.
+`npm run dist:win` now compiles and bundles a standalone `theo-backend.exe` into the installer, so end users do not need to install Python or backend dependencies manually.
 
 ## Notes
 

@@ -41,6 +41,12 @@ const getBackendDir = () => {
   return path.join(__dirname, "../../backend");
 };
 
+const getPackagedBackendExe = () => {
+  if (!app.isPackaged || process.platform !== "win32") return null;
+  const exePath = path.join(process.resourcesPath, "backend-bin", "theo-backend.exe");
+  return fs.existsSync(exePath) ? exePath : null;
+};
+
 const getBundledPythonPath = () => {
   if (!app.isPackaged) return null;
   const exe = process.platform === "win32" ? "python.exe" : "python3";
@@ -74,16 +80,32 @@ const startBackend = async () => {
   if (backendProcess && !backendProcess.killed) return;
 
   const backendDir = getBackendDir();
+  const packagedBackendExe = getPackagedBackendExe();
+
+  const attempts = [];
+  if (packagedBackendExe) {
+    attempts.push({ cmd: packagedBackendExe, args: [], mode: "packaged-exe" });
+  }
+
   const backendEntry = path.join(backendDir, "app.py");
-  if (!fs.existsSync(backendEntry)) {
-    console.error(`[Backend] app.py not found at ${backendEntry}`);
+  if (fs.existsSync(backendEntry)) {
+    for (const attempt of resolvePythonCommand()) {
+      attempts.push({
+        cmd: attempt.cmd,
+        args: [...attempt.args, backendEntry],
+        mode: "python-source",
+      });
+    }
+  }
+
+  if (!attempts.length) {
+    console.error(`[Backend] Could not find backend executable or app.py (checked ${backendEntry})`);
     return;
   }
 
-  const attempts = resolvePythonCommand();
   for (const attempt of attempts) {
     try {
-      const child = spawn(attempt.cmd, [...attempt.args, backendEntry], {
+      const child = spawn(attempt.cmd, attempt.args, {
         cwd: backendDir,
         env: {
           ...process.env,
@@ -127,7 +149,7 @@ const startBackend = async () => {
           console.log(`[Backend] exited with code ${code}`);
           backendProcess = null;
         });
-        console.log(`[Backend] Started with ${attempt.cmd} ${attempt.args.join(" ")}`);
+        console.log(`[Backend] Started (${attempt.mode}) with ${attempt.cmd} ${attempt.args.join(" ")}`);
         return;
       }
     } catch (err) {
