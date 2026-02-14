@@ -1,7 +1,6 @@
 # main ai service for theo
 
 import base64
-import io
 import logging
 import os
 from pathlib import Path
@@ -9,15 +8,25 @@ from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv(Path(__file__).resolve().parents[3] / ".env")
-api_key = os.getenv("OPENAI_API_KEY")
-if not api_key:
-    raise RuntimeError("OPENAI_API_KEY not set. Add it to the .env file in the project root.")
-
-client = OpenAI(api_key=api_key)
 logger = logging.getLogger(__name__)
 
 DELIMITER = "---DELIMITER---"
 MODEL = "gpt-5.2"
+
+_client: OpenAI | None = None
+_client_api_key: str | None = None
+
+
+def _get_client() -> OpenAI:
+    global _client, _client_api_key
+    api_key = os.getenv("OPENAI_API_KEY")
+    if not api_key:
+        raise RuntimeError("OPENAI_API_KEY not set. Add it in Theo settings.")
+
+    if _client is None or _client_api_key != api_key:
+        _client = OpenAI(api_key=api_key)
+        _client_api_key = api_key
+    return _client
 
 
 def load_main_system_prompt() -> str:
@@ -67,7 +76,6 @@ def build_main_input(
         f"{meta_text}"
     )
 
-
     input_items: list[dict] = []
 
     for msg in memory_messages:
@@ -92,6 +100,7 @@ def run_main_llm(
     instructions: str,
     input_items: list[dict],
 ) -> str:
+    client = _get_client()
     response = client.responses.create(
         model=MODEL,
         instructions=instructions,
@@ -108,11 +117,11 @@ def run_main_llm(
 
 
 def parse_main_output(raw_text: str, classification: str) -> tuple[str, str]:
-    
+
    # Parse raw LLM output into (script_text, theo_response_text).
    # For ---AGENT---: expects ---DELIMITER---; top = script, bottom = Theo response.
    # For ---CHAT---: entire output is Theo response; no delimiter required.
-    
+
     raw = (raw_text or "").strip()
     if not raw:
         raise ValueError("Empty output from model")

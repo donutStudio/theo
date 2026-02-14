@@ -8,6 +8,7 @@ const { contextBridge, ipcRenderer } = require("electron");
 // Store environment variables
 let env = {
   GROQ_API_KEY: null,
+  OPENAI_API_KEY: null,
 };
 
 // Listen for environment variables from main process
@@ -24,6 +25,8 @@ contextBridge.exposeInMainWorld("electron", {
   getStartupEnabled: () => ipcRenderer.invoke("get-startup-enabled"),
   setStartupEnabled: (enabled) =>
     ipcRenderer.invoke("set-startup-enabled", { enabled }),
+  getApiConfig: () => ipcRenderer.invoke("get-api-config"),
+  saveApiConfig: (payload) => ipcRenderer.invoke("save-api-config", payload),
   setClickThrough: (enabled, agentMode) =>
     ipcRenderer.invoke("set-click-through", { enabled, agentMode }),
   setNotchBounds: (bounds) => ipcRenderer.invoke("set-notch-bounds", bounds),
