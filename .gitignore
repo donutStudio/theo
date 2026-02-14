@@ -31,6 +31,11 @@ coverage
 
 # Compiled binary addons (https://nodejs.org/api/addons.html)
 build/Release
+frontend/out
+frontend/out-builder
+frontend/dist
+frontend/dist-electron
+frontend/package-lock.json
 
 # Dependency directories
 node_modules/
