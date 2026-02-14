@@ -20,6 +20,7 @@ dotenv.config({ path: join(__dirname, "../../../.env") });
 
 import { app, BrowserWindow, Menu, screen, ipcMain, shell } from "electron";
 import path from "node:path";
+import fs from "node:fs";
 import { createRequire } from "node:module";
 import started from "electron-squirrel-startup";
 import { GlobalKeyboardListener } from "node-global-key-listener";
@@ -29,6 +30,50 @@ const require = createRequire(import.meta.url);
 let mainWindowRef = null;
 let inputLockCount = 0;
 let clickThroughEnabled = false;
+
+const APP_CONFIG_PATH = path.join(app.getPath("userData"), "theo-config.json");
+
+const readAppConfig = () => {
+  try {
+    if (!fs.existsSync(APP_CONFIG_PATH)) {
+      return {
+        GROQ_API_KEY: "",
+        OPENAI_API_KEY: "",
+        setupComplete: false,
+      };
+    }
+    const raw = fs.readFileSync(APP_CONFIG_PATH, "utf8");
+    const parsed = JSON.parse(raw);
+    return {
+      GROQ_API_KEY: parsed.GROQ_API_KEY || "",
+      OPENAI_API_KEY: parsed.OPENAI_API_KEY || "",
+      setupComplete: Boolean(parsed.setupComplete),
+    };
+  } catch (err) {
+    console.warn("[Settings] Failed to read app config:", err?.message || err);
+    return { GROQ_API_KEY: "", OPENAI_API_KEY: "", setupComplete: false };
+  }
+};
+
+const writeAppConfig = (nextConfig) => {
+  try {
+    const current = readAppConfig();
+    const merged = {
+      ...current,
+      ...nextConfig,
+      setupComplete:
+        typeof nextConfig?.setupComplete === "boolean"
+          ? nextConfig.setupComplete
+          : current.setupComplete,
+    };
+    fs.mkdirSync(path.dirname(APP_CONFIG_PATH), { recursive: true });
+    fs.writeFileSync(APP_CONFIG_PATH, JSON.stringify(merged, null, 2), "utf8");
+    return merged;
+  } catch (err) {
+    console.error("[Settings] Failed to write app config:", err?.message || err);
+    return readAppConfig();
+  }
+};
 
 const isInputLocked = () => inputLockCount > 0;
 
@@ -91,19 +136,62 @@ ipcMain.handle("get-input-lock-state", () => ({
 // Initialize Groq client in main process (uses dotenv loaded earlier)
 let groqClient = null;
 let toFile = null;
-try {
-  // require is used here to avoid import ordering issues in this file
-  const Groq = require("groq-sdk");
-  toFile = require("groq-sdk").toFile;
-  if (process.env.GROQ_API_KEY) {
-    groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    console.log("Groq client initialized in main process");
-  } else {
+const refreshGroqClient = () => {
+  const apiKey = process.env.GROQ_API_KEY;
+  if (!apiKey) {
+    groqClient = null;
     console.warn("GROQ_API_KEY not set in main process");
+    return;
   }
+  try {
+    const Groq = require("groq-sdk");
+    toFile = require("groq-sdk").toFile;
+    groqClient = new Groq({ apiKey });
+    console.log("Groq client initialized in main process");
+  } catch (err) {
+    groqClient = null;
+    console.error("Failed to initialize Groq in main process:", err);
+  }
+};
+
+try {
+  refreshGroqClient();
 } catch (err) {
   console.error("Failed to initialize Groq in main process:", err);
 }
+
+ipcMain.handle("get-api-config", () => {
+  const config = readAppConfig();
+  return {
+    GROQ_API_KEY: config.GROQ_API_KEY,
+    OPENAI_API_KEY: config.OPENAI_API_KEY,
+    setupComplete: config.setupComplete,
+  };
+});
+
+ipcMain.handle("save-api-config", (_event, payload) => {
+  const next = writeAppConfig({
+    GROQ_API_KEY: payload?.GROQ_API_KEY?.trim?.() || "",
+    OPENAI_API_KEY: payload?.OPENAI_API_KEY?.trim?.() || "",
+    setupComplete:
+      typeof payload?.setupComplete === "boolean"
+        ? payload.setupComplete
+        : undefined,
+  });
+
+  process.env.GROQ_API_KEY = next.GROQ_API_KEY;
+  process.env.OPENAI_API_KEY = next.OPENAI_API_KEY;
+  refreshGroqClient();
+
+  if (mainWindowRef?.webContents) {
+    mainWindowRef.webContents.send("set-env", {
+      GROQ_API_KEY: process.env.GROQ_API_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+    });
+  }
+
+  return { ok: true, ...next };
+});
 
 // Transcribe audio from renderer (Ctrl+Win recording) and print to terminal
 ipcMain.handle("transcribe-audio", async (_event, arrayBuffer) => {
@@ -319,11 +407,16 @@ const createWindow = () => {
 
   // Load .env from project root (theo/.env)
   require("dotenv").config({ path: path.join(__dirname, "../../../.env") });
+  const persistedConfig = readAppConfig();
+  if (persistedConfig.GROQ_API_KEY) process.env.GROQ_API_KEY = persistedConfig.GROQ_API_KEY;
+  if (persistedConfig.OPENAI_API_KEY) process.env.OPENAI_API_KEY = persistedConfig.OPENAI_API_KEY;
+  refreshGroqClient();
 
   // Pass environment variables to renderer
   mainWindow.webContents.on("did-finish-load", () => {
     mainWindow.webContents.send("set-env", {
       GROQ_API_KEY: process.env.GROQ_API_KEY,
+      OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     });
   });
 
