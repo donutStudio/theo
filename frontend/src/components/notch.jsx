@@ -24,14 +24,19 @@ function SettingsModal({ onClose, onSave }) {
   const [startupSoundFull, setStartupSoundFull] = useState(true);
   const [loading, setLoading] = useState(true);
   const [setSinkIdSupported, setSetSinkIdSupported] = useState(true);
+  const [groqApiKey, setGroqApiKey] = useState("");
+  const [openAIApiKey, setOpenAIApiKey] = useState("");
+  const [showGroqApiKey, setShowGroqApiKey] = useState(false);
+  const [showOpenAIApiKey, setShowOpenAIApiKey] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     const load = async () => {
       setLoading(true);
-      const [devicesResult, startupResult] = await Promise.all([
+      const [devicesResult, startupResult, apiConfig] = await Promise.all([
         enumerateDevices(),
         window.electron?.getStartupEnabled?.() ?? Promise.resolve({ enabled: false }),
+        window.electron?.getApiConfig?.() ?? Promise.resolve({}),
       ]);
       if (cancelled) return;
       setMics(devicesResult.mics);
@@ -44,6 +49,8 @@ function SettingsModal({ onClose, onSave }) {
       setSelectedSpeakerId(speakerExists ? savedSpeaker : "");
       setStartupEnabled(Boolean(startupResult?.enabled));
       setStartupSoundFull(getSavedStartupSoundFull());
+      setGroqApiKey(apiConfig?.GROQ_API_KEY || "");
+      setOpenAIApiKey(apiConfig?.OPENAI_API_KEY || "");
       const audio = document.createElement("audio");
       setSetSinkIdSupported(typeof audio.setSinkId === "function");
       setLoading(false);
@@ -63,6 +70,16 @@ function SettingsModal({ onClose, onSave }) {
         console.warn("[Settings] Failed to set startup:", err);
       }
     }
+    if (window.electron?.saveApiConfig) {
+      try {
+        await window.electron.saveApiConfig({
+          GROQ_API_KEY: groqApiKey,
+          OPENAI_API_KEY: openAIApiKey,
+        });
+      } catch (err) {
+        console.warn("[Settings] Failed to save API keys:", err);
+      }
+    }
     onSave();
   };
 
@@ -79,7 +96,7 @@ function SettingsModal({ onClose, onSave }) {
       </form>
       <h3 className="font-semibold text-3xl bric">Settings</h3>
       <p className="text-gray-500 inter text-sm font-light mt-1.5">
-        Configure microphone, speaker, and startup behavior.
+        Configure audio devices, API keys, and startup behavior.
       </p>
 
       {loading ? (
@@ -121,6 +138,46 @@ function SettingsModal({ onClose, onSave }) {
                 Speaker selection not supported on this platform.
               </p>
             )}
+          </div>
+
+          <div>
+            <label className="font-medium bric text-sm">GROQ_API_KEY</label>
+            <div className="flex gap-2 mt-1">
+              <input
+                type={showGroqApiKey ? "text" : "password"}
+                className="input input-bordered settings-select flex-1 border-gray-400 rounded-xl"
+                value={groqApiKey}
+                placeholder="Paste your Groq API key"
+                onChange={(e) => setGroqApiKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost border border-gray-400 rounded-xl"
+                onClick={() => setShowGroqApiKey((v) => !v)}
+              >
+                {showGroqApiKey ? "Hide" : "Show"}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <label className="font-medium bric text-sm">OPENAI_API_KEY</label>
+            <div className="flex gap-2 mt-1">
+              <input
+                type={showOpenAIApiKey ? "text" : "password"}
+                className="input input-bordered settings-select flex-1 border-gray-400 rounded-xl"
+                value={openAIApiKey}
+                placeholder="Paste your OpenAI API key"
+                onChange={(e) => setOpenAIApiKey(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn btn-ghost border border-gray-400 rounded-xl"
+                onClick={() => setShowOpenAIApiKey((v) => !v)}
+              >
+                {showOpenAIApiKey ? "Hide" : "Show"}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center justify-between">
